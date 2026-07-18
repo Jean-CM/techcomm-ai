@@ -3,7 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
+  const supabase = await createClient().catch(() => null);
+  if (!supabase) {
+    redirect(
+      "/login?error=Supabase%20no%20está%20configurado%20en%20Vercel.%20Agrega%20las%20variables%20de%20entorno%20y%20vuelve%20a%20desplegar."
+    );
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
