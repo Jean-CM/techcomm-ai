@@ -27,6 +27,7 @@ h2 { font-size: clamp(32px, 5vw, 54px); line-height: 1.05; margin-bottom: 18px; 
 .input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: #091522; color: var(--text); }
 .textarea { resize: vertical; min-height: 110px; }
 .button { display: inline-flex; justify-content: center; align-items: center; padding: 12px 16px; border: 0; border-radius: 10px; background: var(--accent); color: #03111c; font-weight: 700; cursor: pointer; }
+.button:disabled { cursor: not-allowed; opacity: .55; }
 .button-small { padding: 9px 14px; }
 .button-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
 
@@ -75,17 +76,42 @@ h2 { font-size: clamp(32px, 5vw, 54px); line-height: 1.05; margin-bottom: 18px; 
 .site-footer strong { color: var(--text); }
 .whatsapp-float { position: fixed; right: 22px; bottom: 22px; z-index: 20; padding: 14px 18px; border-radius: 999px; background: #25d366; color: #04190c; font-weight: 800; box-shadow: 0 15px 34px rgba(0,0,0,.34); }
 
+.pilot-hero { min-height: 650px; padding: 80px 0; display: grid; grid-template-columns: 1.2fr .8fr; align-items: center; gap: 50px; }
+.pilot-hero h1 { max-width: 850px; font-size: clamp(48px, 7vw, 82px); line-height: .98; letter-spacing: -.045em; margin: 24px 0; }
+.pilot-hero > div:first-child > p { max-width: 780px; color: var(--muted); font-size: 20px; line-height: 1.65; }
+.pilot-summary h3 { font-size: 30px; margin: 18px 0 12px; }
+.pilot-summary > p { line-height: 1.65; }
+.pilot-shell { display: grid; grid-template-columns: 280px 1fr; gap: 22px; align-items: start; }
+.pilot-sidebar { display: grid; gap: 10px; position: sticky; top: 18px; }
+.pilot-sidebar .eyebrow { margin-bottom: 10px; }
+.pilot-scenario { width: 100%; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(7,17,31,.65); color: var(--muted); text-align: left; cursor: pointer; }
+.pilot-scenario.active { color: var(--text); border-color: var(--accent); background: rgba(54,197,240,.12); }
+.pilot-console { min-height: 610px; display: flex; flex-direction: column; }
+.pilot-console-header { display: flex; justify-content: space-between; gap: 20px; align-items: start; border-bottom: 1px solid var(--border); padding-bottom: 18px; }
+.pilot-console-header h3 { font-size: 28px; margin: 10px 0 0; }
+.pilot-status { padding: 7px 10px; border-radius: 999px; background: rgba(68,212,146,.14); color: var(--success); font-size: 13px; font-weight: 800; }
+.pilot-messages { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 24px 0; }
+.pilot-actions { display: flex; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--border); padding-top: 18px; }
+.pilot-result { margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: rgba(68,212,146,.12); color: var(--success); border: 1px solid rgba(68,212,146,.35); }
+.pilot-roadmap { padding: 36px; }
+
 @media (max-width: 900px) {
-  .hero, .split-section, .contact-section { grid-template-columns: 1fr; }
+  .hero, .split-section, .contact-section, .pilot-hero, .pilot-shell { grid-template-columns: 1fr; }
   .hero { padding-top: 60px; }
+  .pilot-sidebar { position: static; grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .pilot-sidebar .eyebrow { grid-column: 1 / -1; }
   .feature-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .steps-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 
 @media (max-width: 760px) {
-  .grid-3, .feature-grid, .steps-grid, .form-grid { grid-template-columns: 1fr; }
+  .grid-3, .feature-grid, .steps-grid, .form-grid, .pilot-sidebar { grid-template-columns: 1fr; }
   .nav-actions > a:not(.button) { display: none; }
   .hero { min-height: auto; padding-bottom: 50px; }
   .hero-copy h1 { font-size: clamp(44px, 14vw, 64px); }
+  .pilot-hero { min-height: auto; padding-top: 55px; }
+  .pilot-hero h1 { font-size: clamp(42px, 13vw, 62px); }
+  .pilot-console-header { flex-direction: column; }
+  .chat { max-width: 94%; }
   .site-footer { flex-direction: column; align-items: flex-start; justify-content: center; }
 }
