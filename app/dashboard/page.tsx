@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/login/actions";
@@ -27,7 +28,10 @@ export default async function DashboardPage() {
           <h1 style={{ marginBottom: 4 }}>Techcomm AI</h1>
           <p className="muted" style={{ margin: 0 }}>{user.email}</p>
         </div>
-        <form action={signOut}><button className="button" type="submit">Cerrar sesión</button></form>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <Link className="button" href="/integrations">Integraciones</Link>
+          <form action={signOut}><button className="button" type="submit">Cerrar sesión</button></form>
+        </div>
       </header>
 
       <section className="grid grid-3">
@@ -38,7 +42,7 @@ export default async function DashboardPage() {
 
       <section className="card" style={{ marginTop: 18 }}>
         <h2>Fundación operativa lista</h2>
-        <p className="muted">Autenticación, organizaciones, roles, iniciativas, comentarios, historial, notificaciones y auditoría están protegidos mediante RLS.</p>
+        <p className="muted">Autenticación, organizaciones, roles, iniciativas, comentarios, historial, notificaciones, auditoría e integraciones están protegidos mediante RLS.</p>
       </section>
     </main>
   );
