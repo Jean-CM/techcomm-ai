@@ -97,6 +97,9 @@ h2 { font-size: clamp(32px, 5vw, 54px); line-height: 1.05; margin-bottom: 18px; 
 .mvp-message p { margin: 0; line-height: 1.55; }
 .mvp-message.assistant { align-self: flex-start; background: #15273a; border: 1px solid var(--border); }
 .mvp-message.customer { align-self: flex-end; background: #155d6f; }
+.chat-suggestions { display: flex; flex-wrap: wrap; gap: 9px; max-width: 82%; }
+.chat-suggestions button { padding: 10px 13px; border: 1px solid var(--border); border-radius: 999px; background: rgba(54,197,240,.08); color: var(--text); cursor: pointer; text-align: left; }
+.chat-suggestions button:hover { border-color: var(--accent); background: rgba(54,197,240,.15); }
 .mvp-composer { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 18px 22px; border-top: 1px solid var(--border); }
 .mvp-hint { padding: 0 22px 18px; color: var(--muted); font-size: 13px; }
 .mvp-dashboard { display: grid; gap: 18px; min-width: 0; }
@@ -183,7 +186,7 @@ h2 { font-size: clamp(32px, 5vw, 54px); line-height: 1.05; margin-bottom: 18px; 
   .mvp-intro { padding-top: 48px; }
   .mvp-intro h1 { font-size: clamp(40px, 13vw, 58px); }
   .mvp-header, .mvp-order-main, .order-actions { flex-direction: column; align-items: stretch; }
-  .mvp-message { max-width: 94%; }
+  .mvp-message, .chat-suggestions { max-width: 94%; }
   .mvp-composer { grid-template-columns: 1fr; }
   .mvp-status-control { grid-template-columns: 1fr; }
   .ai-chat-head { grid-template-columns: auto 1fr; }
