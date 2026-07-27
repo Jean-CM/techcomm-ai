@@ -5,6 +5,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 type Message = { role: "customer" | "assistant"; text: string };
 type OrderStatus = "Pendiente" | "Confirmada" | "Técnico en camino" | "En diagnóstico" | "Completada";
 type Intent = "repair" | "quote" | "status" | "general" | "unknown";
+type Step = "need" | "quote_details" | "customer" | "phone" | "address" | "appointment" | "confirm" | "status_id" | "general_followup" | "complete";
+type ToolState = "idle" | "running" | "done";
+
 type WorkOrder = {
   id: string;
   customer: string;
@@ -20,14 +23,17 @@ type WorkOrder = {
 };
 
 type Intake = Partial<Omit<WorkOrder, "id" | "status" | "createdAt" | "priority" | "source">>;
-type Step = "need" | "customer" | "phone" | "address" | "appointment" | "confirm" | "quote_details" | "status_id" | "general_followup" | "complete";
-type ToolState = "idle" | "running" | "done";
 
-const initialMessages: Message[] = [
-  {
-    role: "assistant",
-    text: "¡Hola! Soy Neo, el asistente digital de Techcomm. Puedo ayudarte con reparaciones, precios y disponibilidad de equipos, cotizaciones o el seguimiento de una solicitud. ¿Qué necesitas hoy?"
-  }
+const initialMessages: Message[] = [{
+  role: "assistant",
+  text: "¡Hola! Soy el asistente virtual de Techcomm. ¿En qué puedo ayudarte hoy?"
+}];
+
+const suggestions = [
+  "Quiero reparar mi televisor",
+  "Busco un celular",
+  "Necesito una cotización",
+  "Quiero consultar mi orden"
 ];
 
 const statusOptions: OrderStatus[] = ["Pendiente", "Confirmada", "Técnico en camino", "En diagnóstico", "Completada"];
@@ -35,9 +41,9 @@ const statusOptions: OrderStatus[] = ["Pendiente", "Confirmada", "Técnico en ca
 function detectIntent(text: string): Intent {
   const value = text.toLowerCase();
   if (/estado|seguimiento|orden|solicitud|técnico|tecnico/.test(value)) return "status";
-  if (/precio|cotiz|comprar|disponib|venden|tienen|producto|modelo/.test(value)) return "quote";
+  if (/precio|cotiz|comprar|disponib|venden|tienen|producto|modelo|busco/.test(value)) return "quote";
   if (/dañ|dano|falla|problema|no enciende|no enfría|no enfria|ruido|repar|avería|averia|visita/.test(value)) return "repair";
-  if (/hola|horario|ubicación|ubicacion|servicio|información|informacion|pregunta|consulta/.test(value)) return "general";
+  if (/hola|buenas|horario|ubicación|ubicacion|servicio|información|informacion|pregunta|consulta/.test(value)) return "general";
   return "unknown";
 }
 
@@ -114,6 +120,11 @@ export function SmartCommercePilot() {
     setMessages((current) => [...current, { role: "assistant", text }]);
   }
 
+  function sendSuggestion(text: string) {
+    if (thinking) return;
+    setInput(text);
+  }
+
   function submitMessage(event: FormEvent) {
     event.preventDefault();
     const value = input.trim();
@@ -128,22 +139,24 @@ export function SmartCommercePilot() {
         const detected = detectIntent(value);
         setIntent(detected);
 
-        if (detected === "repair") {
+        if (/^(hola|buenas|buen día|buen dia|hey)$/i.test(value.trim())) {
+          addAssistant("¡Bienvenido! Será un gusto ayudarte. Cuéntame qué necesitas y te orientaré paso a paso.");
+        } else if (detected === "repair") {
           setIntake((current) => ({ ...current, ...splitNeed(value) }));
           setStep("customer");
-          addAssistant("Entiendo. Para orientarte bien, primero registraré el caso y luego coordinaremos la visita. ¿A nombre de quién debo crear la solicitud?");
+          addAssistant("Entiendo. Voy a ayudarte a registrar el caso y coordinar la visita. ¿A nombre de quién preparo la solicitud?");
         } else if (detected === "quote") {
           setIntake((current) => ({ ...current, issue: value }));
           setStep("quote_details");
-          addAssistant("Claro. Puedo ayudarte a revisar opciones y dejar una cotización preparada. ¿Qué producto o modelo buscas y qué presupuesto aproximado tienes?");
+          addAssistant("Claro. ¿Qué producto o modelo buscas y qué presupuesto aproximado tienes?");
         } else if (detected === "status") {
           setStep("status_id");
-          addAssistant("Con gusto reviso el seguimiento. Escríbeme el número de orden, por ejemplo OT-001788. Si no lo tienes, también puedo buscarla usando el teléfono registrado.");
+          addAssistant("Con gusto. Escríbeme el número de orden. Si no lo tienes, también puedo buscarla usando el teléfono registrado.");
         } else if (detected === "general") {
           setStep("general_followup");
-          addAssistant("Claro, cuéntame un poco más. Puedo informarte sobre servicios, horarios, cobertura, productos, precios o ayudarte a iniciar una solicitud.");
+          addAssistant("Claro, cuéntame un poco más para orientarte correctamente.");
         } else {
-          addAssistant("Puedo ayudarte con una reparación, una cotización, disponibilidad de productos o el estado de una orden. Cuéntame cuál de estas gestiones necesitas.");
+          addAssistant("Entiendo. Cuéntame un poco más para saber si necesitas información, una cotización, una reparación o seguimiento de una solicitud.");
         }
         setThinking(false);
         return;
@@ -152,47 +165,51 @@ export function SmartCommercePilot() {
       if (step === "quote_details") {
         setIntake((current) => ({ ...current, equipment: value, issue: `${current.issue ?? "Consulta comercial"}. Preferencias: ${value}` }));
         setStep("customer");
-        addAssistant("Perfecto, ya tengo la referencia de lo que buscas. ¿Cuál es tu nombre completo para preparar la solicitud comercial?");
+        addAssistant("Perfecto, ya tengo la referencia. ¿Cuál es tu nombre completo para preparar la solicitud?");
         setThinking(false);
         return;
       }
 
       if (step === "status_id") {
+        const phone = normalizeDominicanPhone(value);
         const orderId = value.toUpperCase().match(/OT-?\d+/)?.[0]?.replace("OT", "OT-");
-        const found = orderId ? orders.find((order) => order.id === orderId) : undefined;
-        if (found) {
-          addAssistant(`Encontré la orden ${found.id}. Está en estado “${found.status}” y la cita registrada es ${found.appointment}. ¿Necesitas que actualicemos algún dato o que un asesor te contacte?`);
-        } else {
-          addAssistant("No encontré una orden con ese dato en este piloto. Verifica el número o escribe el teléfono usado al registrarla.");
-        }
+        const found = orderId
+          ? orders.find((order) => order.id === orderId)
+          : phone
+            ? orders.find((order) => order.phone === phone)
+            : undefined;
+
+        addAssistant(found
+          ? `Encontré la orden ${found.id}. Actualmente está en estado “${found.status}” y la cita registrada es ${found.appointment}.`
+          : "No encontré una orden con ese dato. Verifica el número o escribe el teléfono usado al registrarla.");
         setThinking(false);
         return;
       }
 
       if (step === "general_followup") {
         const redirected = detectIntent(value);
-        if (redirected === "repair" || redirected === "quote" || redirected === "status") {
+        if (["repair", "quote", "status"].includes(redirected)) {
+          setIntent(redirected);
           setStep("need");
-          setThinking(false);
           setInput(value);
-          addAssistant("Entendido. Ya veo qué tipo de gestión necesitas; envíame ese detalle una vez más para iniciar el flujo correspondiente.");
+          addAssistant("Entendido. Pulsa enviar nuevamente y comenzaré esa gestión.");
         } else {
-          addAssistant("Gracias por explicarlo. En esta versión del piloto puedo registrar tu consulta para seguimiento. ¿Deseas que un asesor te contacte? Indícame tu nombre y luego validaré tu teléfono.");
           setIntent("general");
           setIntake((current) => ({ ...current, issue: value, equipment: "Consulta general" }));
           setStep("customer");
-          setThinking(false);
+          addAssistant("Gracias por explicarlo. ¿Cuál es tu nombre para registrar la consulta y darle seguimiento?");
         }
+        setThinking(false);
         return;
       }
 
       if (step === "customer") {
-        if (value.length < 3) {
-          addAssistant("Necesito un nombre válido para identificar la gestión. Escríbeme tu nombre y apellido, por favor.");
+        if (value.trim().split(/\s+/).length < 2) {
+          addAssistant("Para identificar correctamente la gestión, escríbeme tu nombre y apellido, por favor.");
         } else {
           setIntake((current) => ({ ...current, customer: value }));
           setStep("phone");
-          addAssistant(`Gracias, ${value}. Ahora indícame un teléfono válido de República Dominicana. Acepto números 809, 829 o 849; puedes escribirlo como 809-555-1234.`);
+          addAssistant(`Gracias, ${value}. ¿Cuál es el teléfono donde podemos contactarte?`);
         }
         setThinking(false);
         return;
@@ -201,7 +218,7 @@ export function SmartCommercePilot() {
       if (step === "phone") {
         const phone = normalizeDominicanPhone(value);
         if (!phone) {
-          addAssistant("Ese teléfono no parece válido. Debe tener 10 dígitos y comenzar con 809, 829 o 849. Ejemplo: 829-555-1234. Revísalo y envíamelo nuevamente.");
+          addAssistant("Ese teléfono no parece válido. Debe tener 10 dígitos y comenzar con 809, 829 o 849. Por ejemplo: 829-555-1234.");
           setThinking(false);
           return;
         }
@@ -209,10 +226,10 @@ export function SmartCommercePilot() {
         setIntake((current) => ({ ...current, phone }));
         if (intent === "repair") {
           setStep("address");
-          addAssistant(`Perfecto, validé el número ${phone}. ¿En qué dirección o sector se encuentra el equipo? Incluye una referencia breve para facilitar la visita.`);
+          addAssistant(`Perfecto, validé el número ${phone}. ¿En qué dirección o sector se encuentra el equipo?`);
         } else {
           setStep("confirm");
-          addAssistant(`Teléfono validado: ${phone}. Ya tengo los datos necesarios para registrar tu ${intent === "quote" ? "solicitud de cotización" : "consulta"}. Escribe “confirmar” para guardarla.`);
+          addAssistant(`Listo, validé el número ${phone}. Escribe “confirmar” para registrar la gestión.`);
         }
         setThinking(false);
         return;
@@ -224,7 +241,7 @@ export function SmartCommercePilot() {
         } else {
           setIntake((current) => ({ ...current, address: value }));
           setStep("appointment");
-          addAssistant("Gracias. ¿Qué día y rango de horario te convienen para recibir al técnico? Por ejemplo: lunes entre 9:00 a. m. y 12:00 p. m.");
+          addAssistant("Gracias. ¿Qué día y rango de horario te convienen para recibir al técnico?");
         }
         setThinking(false);
         return;
@@ -233,7 +250,7 @@ export function SmartCommercePilot() {
       if (step === "appointment") {
         setIntake((current) => ({ ...current, appointment: value }));
         setStep("confirm");
-        addAssistant(`Perfecto. Preparé este resumen: ${intake.equipment ?? "equipo"}, detalle “${intake.issue ?? "por confirmar"}”, visita en ${intake.address ?? "dirección pendiente"}, horario ${value}, contacto ${intake.phone}. La evaluación tiene un costo referencial de RD$750. Escribe “confirmar” para crear la cita y la orden.`);
+        addAssistant(`Perfecto. Tengo registrado: ${intake.equipment ?? "equipo"}, visita en ${intake.address ?? "la dirección indicada"}, horario ${value} y contacto ${intake.phone}. La evaluación tiene un costo referencial de RD$750. Escribe “confirmar” para crear la cita y la orden.`);
         setThinking(false);
         return;
       }
@@ -260,7 +277,7 @@ export function SmartCommercePilot() {
         };
         setOrders((current) => [order, ...current]);
         setStep("complete");
-        addAssistant(`Listo, ${order.customer}. Registré la gestión con el número ${order.id}. El teléfono confirmado es ${order.phone}. ${intent === "repair" ? `La visita quedó solicitada para ${order.appointment}.` : "El equipo de Techcomm podrá darle seguimiento desde el panel."}`);
+        addAssistant(`Listo, ${order.customer}. Registré la gestión con el número ${order.id}.`);
         setThinking(false);
         return;
       }
@@ -288,38 +305,42 @@ export function SmartCommercePilot() {
     <div className="mvp-shell">
       <aside className="mvp-sidebar">
         <div><span className="eyebrow">Techcomm AI</span><h3>Centro de operaciones</h3></div>
-        <button className={`mvp-nav ${view === "chat" ? "active" : ""}`} onClick={() => setView("chat")} type="button">Neo IA Command Center</button>
+        <button className={`mvp-nav ${view === "chat" ? "active" : ""}`} onClick={() => setView("chat")} type="button">Asistente virtual</button>
         <button className={`mvp-nav ${view === "dashboard" ? "active" : ""}`} onClick={() => setView("dashboard")} type="button">Panel administrativo <span>{orders.length}</span></button>
         <button className="mvp-nav" onClick={restart} type="button">Nueva conversación</button>
-        <div className="mvp-live"><span className="signal-dot" /> Neo IA operativo</div>
+        <div className="mvp-live"><span className="signal-dot" /> Asistente disponible</div>
       </aside>
 
       {view === "chat" ? (
         <section className="ai-command-center">
           <header className="mvp-header card ai-topbar">
-            <div><span className="eyebrow">Atención digital activa</span><h2>Neo IA Command Center</h2></div>
-            <div className="ai-health"><span className="signal-dot" /> Sistema listo · gestión multicanal</div>
+            <div><span className="eyebrow">Atención digital activa</span><h2>Techcomm AI</h2></div>
+            <div className="ai-health"><span className="signal-dot" /> Sistema disponible</div>
           </header>
           <div className="ai-grid">
             <section className="mvp-workspace card">
               <div className="ai-chat-head">
-                <div className="ai-avatar">N</div>
-                <div><strong>Neo IA</strong><span>Consultas, ventas, cotizaciones y servicio técnico</span></div>
+                <div className="ai-avatar">T</div>
+                <div><strong>Asistente virtual</strong><span>Consultas, ventas y servicio técnico</span></div>
                 <span className="pilot-status">En línea</span>
               </div>
               <div className="mvp-chat">
                 {messages.map((message, index) => (
                   <div className={`mvp-message ${message.role}`} key={`${message.role}-${index}`}>
-                    <small>{message.role === "assistant" ? "Neo IA" : "Cliente"}</small><p>{message.text}</p>
+                    <small>{message.role === "assistant" ? "Techcomm" : "Cliente"}</small><p>{message.text}</p>
                   </div>
                 ))}
-                {thinking && <div className="mvp-message assistant ai-thinking"><small>Neo IA</small><p><span /> Analizando tu solicitud…</p></div>}
+                {messages.length === 1 && step === "need" && (
+                  <div className="chat-suggestions">
+                    {suggestions.map((suggestion) => <button key={suggestion} onClick={() => sendSuggestion(suggestion)} type="button">{suggestion}</button>)}
+                  </div>
+                )}
+                {thinking && <div className="mvp-message assistant ai-thinking"><small>Techcomm</small><p><span /> Analizando tu solicitud…</p></div>}
               </div>
               <form className="mvp-composer" onSubmit={submitMessage}>
                 <input aria-label="Mensaje" className="input" disabled={thinking} onChange={(event) => setInput(event.target.value)} placeholder={step === "confirm" ? "Escribe confirmar o indica qué deseas corregir…" : "Escribe tu consulta o solicitud…"} value={input} />
                 <button className="button" disabled={thinking} type="submit">Enviar</button>
               </form>
-              <div className="mvp-hint">Prueba: “Quiero saber el precio de un televisor”, “Mi nevera no enfría” o “Quiero consultar mi orden”.</div>
             </section>
 
             <aside className="ai-intelligence card">
@@ -347,13 +368,13 @@ export function SmartCommercePilot() {
         </section>
       ) : (
         <section className="mvp-dashboard">
-          <header className="mvp-header card"><div><span className="eyebrow">Administración</span><h2>Panel del piloto</h2></div><button className="button" onClick={() => setView("chat")} type="button">Abrir Neo IA</button></header>
+          <header className="mvp-header card"><div><span className="eyebrow">Administración</span><h2>Panel del piloto</h2></div><button className="button" onClick={() => setView("chat")} type="button">Abrir asistente</button></header>
           <div className="mvp-metrics">
             <article className="card"><span>Total órdenes</span><strong>{metrics.total}</strong></article><article className="card"><span>Creadas hoy</span><strong>{metrics.today}</strong></article><article className="card"><span>Activas</span><strong>{metrics.active}</strong></article><article className="card"><span>Completadas</span><strong>{metrics.completed}</strong></article>
           </div>
           <div className="card mvp-orders">
             <div className="mvp-orders-title"><div><span className="eyebrow">Operación en tiempo real</span><h3>Gestiones registradas</h3></div></div>
-            {orders.length === 0 ? <div className="mvp-empty"><h3>Aún no hay gestiones</h3><p>Completa una conversación con Neo IA y aparecerá aquí automáticamente.</p></div> : (
+            {orders.length === 0 ? <div className="mvp-empty"><h3>Aún no hay gestiones</h3><p>Completa una conversación y aparecerá aquí automáticamente.</p></div> : (
               <div className="mvp-order-list">{orders.map((order) => (
                 <article className="mvp-order" key={order.id}>
                   <div className="mvp-order-main"><div><strong>{order.id}</strong><span>{order.customer} · {order.phone}</span><small>{formatRelative(order.createdAt)} · Creada por {order.source}</small></div><div className="order-badges"><span className="priority-pill">{order.priority}</span><span className="mvp-status-pill">{order.status}</span></div></div>
