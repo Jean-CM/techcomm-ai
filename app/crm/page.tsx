@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react";
 import styles from "./crm.module.css";
 
-type Technician = { id: string; name: string; status: "Disponible" | "Ocupado" | "Enfermo"; specialty: string };
+type Technician = { id: string; name: string; status: "Disponible" | "Ocupado" | "No disponible"; specialty: string };
 type Appointment = { id: string; time: string; customer: string; service: string; zone: string; technicianId: string; status: string };
 
 const techniciansSeed: Technician[] = [
   { id: "t1", name: "Luis Pérez", status: "Disponible", specialty: "TV y audio" },
   { id: "t2", name: "Carlos Méndez", status: "Ocupado", specialty: "Neveras y lavadoras" },
   { id: "t3", name: "Ana Rodríguez", status: "Disponible", specialty: "Celulares y laptops" },
-  { id: "t4", name: "Miguel Santos", status: "Enfermo", specialty: "Electrodomésticos" }
+  { id: "t4", name: "Miguel Santos", status: "No disponible", specialty: "Electrodomésticos" }
 ];
 
 const appointmentsSeed: Appointment[] = [
@@ -42,14 +42,16 @@ export default function CrmPage() {
     setAppointments((current) => current.map((item) => item.id === appointmentId ? { ...item, technicianId } : item));
   }
 
-  function markSick(technicianId: string) {
-    setTechnicians((current) => current.map((item) => item.id === technicianId ? { ...item, status: "Enfermo" } : item));
+  function toggleAvailability(technicianId: string) {
+    setTechnicians((current) => current.map((item) => item.id === technicianId
+      ? { ...item, status: item.status === "No disponible" ? "Disponible" : "No disponible" }
+      : item));
   }
 
   return (
     <main className={styles.shell}>
       <aside className={styles.sidebar}>
-        <div><span className={styles.brand}>TECHCOMM AI</span><h2>Smart Commerce</h2><p>CRM omnicanal</p></div>
+        <div><span className={styles.brand}>TECHCOMM AI</span><h2>Techcomm 360</h2><p>Centro de operaciones omnicanal</p></div>
         <nav>{["Dashboard","Conversaciones","Clientes","Agenda","Técnicos","Órdenes","Ventas","Productos","Cotizaciones"].map((item) => <button className={active === item ? styles.active : ""} key={item} onClick={() => setActive(item)}>{item}</button>)}</nav>
         <div className={styles.channelStatus}><span /> WhatsApp conectado<br/><span /> Agente de voz activo</div>
       </aside>
@@ -62,7 +64,7 @@ export default function CrmPage() {
             <article><small>Conversaciones activas</small><strong>8</strong><span>5 WhatsApp · 3 web</span></article>
             <article><small>Citas de hoy</small><strong>{appointments.length}</strong><span>2 confirmadas</span></article>
             <article><small>Oportunidades de venta</small><strong>6</strong><span>RD$ 184,300 estimados</span></article>
-            <article><small>Técnicos disponibles</small><strong>{available}</strong><span>1 incidencia activa</span></article>
+            <article><small>Técnicos disponibles</small><strong>{available}</strong><span>1 incidencia operativa</span></article>
           </div>
 
           <div className={styles.gridTwo}>
@@ -77,11 +79,11 @@ export default function CrmPage() {
           </div>
         </>}
 
-        {active === "Agenda" && <section className={styles.card}><div className={styles.cardTitle}><div><small>CONTROL OPERATIVO</small><h3>Agenda y reasignación de técnicos</h3></div></div>{appointments.map((item) => <div className={styles.scheduleRow} key={item.id}><div><strong>{item.time} · {item.customer}</strong><p>{item.service} · {item.zone}</p></div><select value={item.technicianId} onChange={(event) => reassign(item.id, event.target.value)}>{technicians.filter((tech) => tech.status !== "Enfermo").map((tech) => <option key={tech.id} value={tech.id}>{tech.name} · {tech.status}</option>)}</select><span>{item.status}</span></div>)}</section>}
+        {active === "Agenda" && <section className={styles.card}><div className={styles.cardTitle}><div><small>CONTROL OPERATIVO</small><h3>Agenda y reasignación de técnicos</h3></div></div>{appointments.map((item) => <div className={styles.scheduleRow} key={item.id}><div><strong>{item.time} · {item.customer}</strong><p>{item.service} · {item.zone}</p></div><select value={item.technicianId} onChange={(event) => reassign(item.id, event.target.value)}>{technicians.filter((tech) => tech.status !== "No disponible").map((tech) => <option key={tech.id} value={tech.id}>{tech.name} · {tech.status}</option>)}</select><span>{item.status}</span></div>)}</section>}
 
-        {active === "Técnicos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>EQUIPO DE CAMPO</small><h3>Disponibilidad de técnicos</h3></div></div>{technicians.map((tech) => <div className={styles.technicianRow} key={tech.id}><div><strong>{tech.name}</strong><p>{tech.specialty}</p></div><span className={styles[tech.status.toLowerCase()] ?? ""}>{tech.status}</span><button disabled={tech.status === "Enfermo"} onClick={() => markSick(tech.id)}>Marcar enfermo</button></div>)}</section>}
+        {active === "Técnicos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>EQUIPO DE CAMPO</small><h3>Disponibilidad de técnicos</h3></div></div>{technicians.map((tech) => <div className={styles.technicianRow} key={tech.id}><div><strong>{tech.name}</strong><p>{tech.specialty}</p></div><span>{tech.status}</span><button onClick={() => toggleAvailability(tech.id)}>{tech.status === "No disponible" ? "Marcar disponible" : "Marcar no disponible"}</button></div>)}</section>}
 
-        {!["Dashboard","Agenda","Técnicos"].includes(active) && <section className={styles.card}><div className={styles.placeholder}><small>MÓDULO CRM</small><h2>{active}</h2><p>Este módulo ya forma parte del alcance del CRM y será conectado a Supabase y WhatsApp en la siguiente integración.</p></div></section>}
+        {!["Dashboard","Agenda","Técnicos"].includes(active) && <section className={styles.card}><div className={styles.placeholder}><small>MÓDULO CRM</small><h2>{active}</h2><p>Este módulo ya forma parte del alcance de Techcomm 360 y será conectado a Supabase y WhatsApp en la siguiente integración.</p></div></section>}
       </section>
     </main>
   );
