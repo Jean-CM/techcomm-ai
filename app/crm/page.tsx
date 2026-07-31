@@ -1,172 +1,126 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./crm.module.css";
 
-type Technician = { id: string; name: string; status: "Disponible" | "Ocupado" | "No disponible"; specialty: string };
-type Appointment = { id: string; time: string; customer: string; service: string; zone: string; technicianId: string; status: string };
-type Customer = { id: string; name: string; phone: string; address: string; source: string };
-type Product = { id: string; name: string; category: string; brand: string; stock: number; reserved: number; price: string };
-type WorkOrder = { id: string; customer: string; equipment: string; issue: string; status: string; technician: string };
-type Quote = { id: string; customer: string; concept: string; total: string; status: string };
-type Sale = { id: string; customer: string; product: string; amount: string; status: string };
-type ManagementType = "Cliente" | "Producto" | "Cita" | "Orden" | "Cotización" | "Venta";
+type ManagementType = "Cliente" | "Producto" | "Cita" | "Orden" | "Cotización" | "Venta" | "Técnico";
+type Customer = { id: string; full_name: string; phone: string; address?: string | null; source?: string | null };
+type Product = { id: string; sku: string; name: string; piece_name?: string | null; description?: string | null; category?: string | null; brand?: string | null; model?: string | null; unit_cost?: number | null; sale_price?: number | null; price?: number | null; max_discount_pct?: number | null; minimum_authorized_price?: number | null; stock: number; reserved_stock: number };
+type Technician = { id: string; full_name: string; phone?: string | null; specialties?: string[] | null; status: string; whatsapp_enabled?: boolean };
+type Appointment = { id: string; customer_id?: string | null; technician_id?: string | null; starts_at: string; address?: string | null; status: string; technician_confirmation_status?: string | null; notes?: string | null };
+type WorkOrder = { id: string; order_number: string; customer_id?: string | null; equipment?: string | null; issue?: string | null; status: string };
+type Quote = { id: string; quote_number: string; customer_id?: string | null; status: string; total?: number | null };
+type Sale = { id: string; customer_id?: string | null; quantity: number; unit_price: number; status: string };
+type CallEvent = { id: string; conversation_id: string; customer_phone?: string | null; status?: string | null; summary?: string | null; created_at: string };
+type Overview = { ok: boolean; customers: Customer[]; products: Product[]; technicians: Technician[]; appointments: Appointment[]; work_orders: WorkOrder[]; quotes: Quote[]; sales: Sale[]; call_events: CallEvent[] };
 
-const techniciansSeed: Technician[] = [
-  { id: "t1", name: "Luis Pérez", status: "Disponible", specialty: "TV y audio" },
-  { id: "t2", name: "Carlos Méndez", status: "Ocupado", specialty: "Neveras y lavadoras" },
-  { id: "t3", name: "Ana Rodríguez", status: "Disponible", specialty: "Celulares y laptops" },
-  { id: "t4", name: "Miguel Santos", status: "No disponible", specialty: "Electrodomésticos" },
-];
+const emptyOverview: Overview = { ok: true, customers: [], products: [], technicians: [], appointments: [], work_orders: [], quotes: [], sales: [], call_events: [] };
+const menu = ["Dashboard", "Conversaciones", "Clientes", "Agenda", "Técnicos", "Órdenes", "Ventas", "Productos", "Cotizaciones"];
 
-const appointmentsSeed: Appointment[] = [
-  { id: "C-1042", time: "10:00 a. m.", customer: "Jean Carlos Mateo", service: "Nevera LG no enfría", zone: "Villa Mella", technicianId: "t2", status: "Confirmada" },
-  { id: "C-1043", time: "11:30 a. m.", customer: "Rosa Martínez", service: "TV Samsung sin imagen", zone: "Santo Domingo Este", technicianId: "t1", status: "Pendiente" },
-  { id: "C-1044", time: "2:00 p. m.", customer: "Pedro Gómez", service: "Laptop no enciende", zone: "Los Prados", technicianId: "t3", status: "Confirmada" },
-];
+function money(value?: number | null) {
+  if (value === null || value === undefined) return "Por confirmar";
+  return new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP", maximumFractionDigits: 2 }).format(value);
+}
 
-const conversations = [
-  { channel: "WhatsApp", customer: "Jean Carlos Mateo", text: "Mi nevera dejó de enfriar", intent: "Reparación", time: "Ahora" },
-  { channel: "WhatsApp", customer: "Laura Díaz", text: "¿Tienen iPhone 15 disponible?", intent: "Venta", time: "Hace 4 min" },
-  { channel: "Llamada", customer: "Rosa Martínez", text: "Confirmó visita técnica", intent: "Confirmación", time: "Hace 12 min" },
-];
+function parseCsv(text: string) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) return [];
+  const split = (line: string) => {
+    const values: string[] = [];
+    let current = "";
+    let quoted = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i];
+      if (char === '"' && line[i + 1] === '"') { current += '"'; i += 1; }
+      else if (char === '"') quoted = !quoted;
+      else if (char === "," && !quoted) { values.push(current.trim()); current = ""; }
+      else current += char;
+    }
+    values.push(current.trim());
+    return values;
+  };
+  const normalize = (value: string) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const headers = split(lines[0]).map(normalize);
+  return lines.slice(1).map((line) => { const values = split(line); return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])); });
+}
 
 export default function CrmPage() {
   const [active, setActive] = useState("Dashboard");
+  const [data, setData] = useState<Overview>(emptyOverview);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [managementType, setManagementType] = useState<ManagementType>("Cliente");
-  const [technicians, setTechnicians] = useState(techniciansSeed);
-  const [appointments, setAppointments] = useState(appointmentsSeed);
-  const [customers, setCustomers] = useState<Customer[]>([
-    { id: "CL-1001", name: "Jean Carlos Mateo", phone: "829-524-6242", address: "Villa Mella", source: "WhatsApp" },
-    { id: "CL-1002", name: "Rosa Martínez", phone: "809-555-1488", address: "Santo Domingo Este", source: "Presencial" },
-  ]);
-  const [products, setProducts] = useState<Product[]>([
-    { id: "PR-1001", name: "Cargador USB-C 25W", category: "Accesorios", brand: "Samsung", stock: 18, reserved: 3, price: "RD$ 1,650" },
-    { id: "PR-1002", name: "Pantalla LCD de reemplazo", category: "Piezas", brand: "Compatible", stock: 8, reserved: 1, price: "Por confirmar" },
-    { id: "PR-1003", name: "Batería para móvil", category: "Piezas", brand: "Compatible", stock: 12, reserved: 2, price: "Por confirmar" },
-  ]);
-  const [orders, setOrders] = useState<WorkOrder[]>([
-    { id: "OT-057267", customer: "Jean Carlos Mateo", equipment: "Nevera LG", issue: "No enfría", status: "Agendada", technician: "Carlos Méndez" },
-  ]);
-  const [quotes, setQuotes] = useState<Quote[]>([
-    { id: "CT-2001", customer: "Laura Díaz", concept: "Cargador USB-C", total: "RD$ 1,650", status: "Borrador" },
-  ]);
-  const [sales, setSales] = useState<Sale[]>([
-    { id: "VT-3001", customer: "Laura Díaz", product: "Cargador USB-C 25W", amount: "RD$ 1,650", status: "Oportunidad" },
-  ]);
 
-  const available = useMemo(() => technicians.filter((item) => item.status === "Disponible").length, [technicians]);
-  const nextId = (prefix: string, length: number) => `${prefix}-${String(length + 1).padStart(4, "0")}`;
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/crm/overview", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? payload.errors?.join(", ") ?? "No fue posible cargar el CRM.");
+      setData(payload);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Error al cargar el CRM."); }
+    finally { setLoading(false); }
+  }, []);
 
-  function reassign(appointmentId: string, technicianId: string) {
-    setAppointments((current) => current.map((item) => item.id === appointmentId ? { ...item, technicianId } : item));
-  }
+  useEffect(() => { void load(); }, [load]);
 
-  function toggleAvailability(technicianId: string) {
-    setTechnicians((current) => current.map((item) => item.id === technicianId
-      ? { ...item, status: item.status === "No disponible" ? "Disponible" : "No disponible" }
-      : item));
-  }
+  const customersById = useMemo(() => new Map(data.customers.map((item) => [item.id, item])), [data.customers]);
+  const techniciansById = useMemo(() => new Map(data.technicians.map((item) => [item.id, item])), [data.technicians]);
+  const available = data.technicians.filter((item) => item.status === "available").length;
 
-  function openManagement(type?: ManagementType) {
-    if (type) setManagementType(type);
-    setModalOpen(true);
-  }
-
-  function submitManagement(event: FormEvent<HTMLFormElement>) {
+  async function submitManagement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const name = String(form.get("name") ?? "").trim();
-    const detail = String(form.get("detail") ?? "").trim();
-    const secondary = String(form.get("secondary") ?? "").trim();
-
-    if (!name) return;
-
-    if (managementType === "Cliente") {
-      setCustomers((current) => [{ id: nextId("CL", current.length), name, phone: detail || "Sin teléfono", address: secondary || "Sin dirección", source: "Presencial" }, ...current]);
-      setActive("Clientes");
-    }
-    if (managementType === "Producto") {
-      setProducts((current) => [{ id: nextId("PR", current.length), name, category: detail || "General", brand: secondary || "Sin marca", stock: 0, reserved: 0, price: "Por confirmar" }, ...current]);
-      setActive("Productos");
-    }
-    if (managementType === "Cita") {
-      setAppointments((current) => [{ id: nextId("C", current.length + 1040), time: secondary || "Por coordinar", customer: name, service: detail || "Servicio por definir", zone: "Pendiente", technicianId: technicians.find((item) => item.status === "Disponible")?.id ?? "t1", status: "Pendiente" }, ...current]);
-      setActive("Agenda");
-    }
-    if (managementType === "Orden") {
-      setOrders((current) => [{ id: nextId("OT", current.length + 57260), customer: name, equipment: secondary || "Equipo por identificar", issue: detail || "Pendiente de descripción", status: "Nueva", technician: "Sin asignar" }, ...current]);
-      setActive("Órdenes");
-    }
-    if (managementType === "Cotización") {
-      setQuotes((current) => [{ id: nextId("CT", current.length + 2000), customer: name, concept: detail || "Concepto por definir", total: secondary || "Por confirmar", status: "Borrador" }, ...current]);
-      setActive("Cotizaciones");
-    }
-    if (managementType === "Venta") {
-      setSales((current) => [{ id: nextId("VT", current.length + 3000), customer: name, product: detail || "Producto por definir", amount: secondary || "Por confirmar", status: "Oportunidad" }, ...current]);
-      setActive("Ventas");
-    }
-
-    event.currentTarget.reset();
+    setMessage("Guardando...");
+    const response = await fetch("/api/crm/manage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: managementType, name: form.get("name"), detail: form.get("detail"), secondary: form.get("secondary") }) });
+    const payload = await response.json();
+    if (!response.ok) { setMessage(payload.error ?? "No fue posible guardar."); return; }
     setModalOpen(false);
+    setMessage(`${managementType} registrado correctamente.`);
+    event.currentTarget.reset();
+    await load();
   }
 
-  const labelMap: Record<ManagementType, [string, string, string]> = {
-    Cliente: ["Nombre completo", "Teléfono", "Dirección o sector"],
-    Producto: ["Nombre del producto", "Categoría", "Marca o modelo"],
-    Cita: ["Cliente", "Servicio solicitado", "Fecha y hora"],
-    Orden: ["Cliente", "Falla reportada", "Equipo"],
-    Cotización: ["Cliente", "Producto o servicio", "Monto estimado"],
-    Venta: ["Cliente", "Producto", "Monto estimado"],
+  async function importCatalog(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) { setMessage("El importador directo acepta CSV. Abre la plantilla en Excel y guárdala como CSV UTF-8."); return; }
+    const rows = parseCsv(await file.text());
+    if (!rows.length) { setMessage("El archivo no contiene filas válidas."); return; }
+    setMessage(`Importando ${rows.length} filas...`);
+    const response = await fetch("/api/crm/import-catalog", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ rows, source: file.name }) });
+    const payload = await response.json();
+    if (!response.ok) { setMessage(payload.error ?? "No fue posible importar."); return; }
+    setMessage(`Importación completada: ${payload.imported} registros.`);
+    await load();
+  }
+
+  const labels: Record<ManagementType, [string, string, string]> = {
+    Cliente: ["Nombre completo", "Teléfono", "Dirección o sector"], Producto: ["Nombre o pieza", "Categoría", "Marca o modelo"], Cita: ["Nombre del cliente", "Servicio", "Fecha y hora"], Orden: ["Nombre del cliente", "Falla", "Equipo"], Cotización: ["Nombre del cliente", "Concepto", "Monto"], Venta: ["Nombre del cliente", "Producto", "Monto"], Técnico: ["Nombre completo", "Teléfono WhatsApp", "Especialidades separadas por coma"],
   };
+  const empty = (text: string) => <div className={styles.placeholder}><p>{text}</p></div>;
 
-  return (
-    <main className={styles.shell}>
-      <aside className={styles.sidebar}>
-        <div><span className={styles.brand}>TECHCOMM AI</span><h2>Techcomm 360</h2><p>Centro de operaciones omnicanal</p></div>
-        <nav>{["Dashboard","Conversaciones","Clientes","Agenda","Técnicos","Órdenes","Ventas","Productos","Cotizaciones"].map((item) => <button className={active === item ? styles.active : ""} key={item} onClick={() => setActive(item)}>{item}</button>)}</nav>
-        <div className={styles.channelStatus}><span /> WhatsApp conectado<br/><span /> Agente de voz activo</div>
-      </aside>
+  return <main className={styles.shell}>
+    <aside className={styles.sidebar}><div><span className={styles.brand}>TECHCOMM AI</span><h2>Techcomm 360</h2><p>Centro de operaciones omnicanal</p></div><nav>{menu.map((item) => <button className={active === item ? styles.active : ""} key={item} onClick={() => setActive(item)}>{item}</button>)}</nav><div className={styles.channelStatus}><span /> Datos en Supabase<br/><span /> WhatsApp y voz conectados</div></aside>
+    <section className={styles.content}>
+      <header className={styles.header}><div><small>OPERACIÓN EN TIEMPO REAL</small><h1>{active}</h1></div><div className={styles.headerActions}><button onClick={() => { setManagementType("Cliente"); setModalOpen(true); }}>+ Nueva gestión</button><div className={styles.avatar}>JC</div></div></header>
+      {message && <section className={styles.card} style={{ marginBottom: 16, padding: 12 }}>{message}</section>}
+      {loading && empty("Cargando información desde Supabase...")}
 
-      <section className={styles.content}>
-        <header className={styles.header}><div><small>OPERACIÓN EN TIEMPO REAL</small><h1>{active}</h1></div><div className={styles.headerActions}><button onClick={() => openManagement()}>+ Nueva gestión</button><div className={styles.avatar}>JC</div></div></header>
+      {!loading && active === "Dashboard" && <><div className={styles.metrics}><article><small>Llamadas registradas</small><strong>{data.call_events.length}</strong><span>ElevenLabs + Supabase</span></article><article><small>Citas</small><strong>{data.appointments.length}</strong><span>Agenda real</span></article><article><small>Órdenes</small><strong>{data.work_orders.length}</strong><span>RD$500 por visita</span></article><article><small>Técnicos disponibles</small><strong>{available}</strong><span>{data.technicians.length} registrados</span></article></div><div className={styles.gridTwo}><section className={styles.card}><div className={styles.cardTitle}><div><small>CONVERSACIONES</small><h3>Llamadas recientes</h3></div><button onClick={() => setActive("Conversaciones")}>Ver todas</button></div>{data.call_events.length ? data.call_events.slice(0,4).map((item) => <div className={styles.conversation} key={item.id}><div className={styles.channel}>☎</div><div><strong>{item.customer_phone || "Contacto sin identificar"}</strong><p>{item.summary || "Sin resumen"}</p></div><div><span>{item.status || "procesada"}</span><small>{new Date(item.created_at).toLocaleString("es-DO")}</small></div></div>) : empty("Aún no hay llamadas registradas.")}</section><section className={styles.card}><div className={styles.cardTitle}><div><small>INVENTARIO</small><h3>Productos y piezas</h3></div><button onClick={() => setActive("Productos")}>Abrir catálogo</button></div>{data.products.length ? data.products.slice(0,4).map((item) => <div className={styles.product} key={item.id}><div><strong>{item.piece_name || item.name}</strong><small>{item.brand || "Sin marca"} · {item.model || "Sin modelo"}</small></div><div><b>{money(item.sale_price ?? item.price)}</b><span>{Math.max(0,item.stock-item.reserved_stock)} disponibles</span></div></div>) : empty("Importa el catálogo para comenzar.")}</section></div></>}
 
-        {active === "Dashboard" && <>
-          <div className={styles.metrics}>
-            <article><small>Conversaciones activas</small><strong>8</strong><span>5 WhatsApp · 3 web</span></article>
-            <article><small>Citas de hoy</small><strong>{appointments.length}</strong><span>{appointments.filter((item) => item.status === "Confirmada").length} confirmadas</span></article>
-            <article><small>Oportunidades de venta</small><strong>{sales.length}</strong><span>Seguimiento comercial activo</span></article>
-            <article><small>Técnicos disponibles</small><strong>{available}</strong><span>Asignación operativa</span></article>
-          </div>
-          <div className={styles.gridTwo}>
-            <section className={styles.card}><div className={styles.cardTitle}><div><small>BANDEJA OMNICANAL</small><h3>Conversaciones recientes</h3></div><button onClick={() => setActive("Conversaciones")}>Ver todas</button></div>{conversations.map((item) => <div className={styles.conversation} key={item.customer}><div className={styles.channel}>{item.channel === "WhatsApp" ? "W" : "☎"}</div><div><strong>{item.customer}</strong><p>{item.text}</p></div><div><span>{item.intent}</span><small>{item.time}</small></div></div>)}</section>
-            <section className={styles.card}><div className={styles.cardTitle}><div><small>AGENDA INTELIGENTE</small><h3>Próximas visitas</h3></div><button onClick={() => setActive("Agenda")}>Abrir calendario</button></div>{appointments.slice(0,3).map((item) => { const tech = technicians.find((t) => t.id === item.technicianId); return <div className={styles.appointment} key={item.id}><div className={styles.time}>{item.time}</div><div><strong>{item.customer}</strong><p>{item.service} · {item.zone}</p><small>{item.id} · {item.status}</small></div><div className={styles.techBadge}>{tech?.name}<span>{tech?.status}</span></div></div>})}</section>
-          </div>
-          <div className={styles.gridTwo}>
-            <section className={styles.card}><div className={styles.cardTitle}><div><small>VENTAS E INVENTARIO</small><h3>Productos registrados</h3></div><button onClick={() => setActive("Productos")}>Gestionar inventario</button></div>{products.slice(0,3).map((item) => <div className={styles.product} key={item.id}><div><strong>{item.name}</strong><small>{item.category} · {item.brand}</small></div><div><b>{item.price}</b><span>{item.stock} disponibles · {item.reserved} reservados</span></div></div>)}</section>
-            <section className={styles.card}><div className={styles.cardTitle}><div><small>AUTOMATIZACIONES IA</small><h3>Confirmaciones programadas</h3></div></div><div className={styles.automation}><span>09:00</span><div><strong>Llamar a Jean Carlos Mateo</strong><p>Confirmar cita C-1042 una hora antes</p></div><b>Pendiente</b></div><div className={styles.automation}><span>10:30</span><div><strong>Mensaje WhatsApp a Rosa Martínez</strong><p>Recordatorio y ubicación de la visita</p></div><b>Programado</b></div></section>
-          </div>
-        </>}
+      {!loading && active === "Conversaciones" && <section className={styles.card}><div className={styles.cardTitle}><div><small>ELEVENLABS + SUPABASE</small><h3>Llamadas registradas</h3></div></div>{data.call_events.length ? data.call_events.map((item) => <div className={styles.conversation} key={item.id}><div className={styles.channel}>☎</div><div><strong>{item.customer_phone || item.conversation_id}</strong><p>{item.summary || "Sin resumen disponible"}</p></div><div><span>{item.status || "done"}</span><small>{new Date(item.created_at).toLocaleString("es-DO")}</small></div></div>) : empty("No hay conversaciones registradas.")}</section>}
+      {!loading && active === "Clientes" && <section className={styles.card}><div className={styles.cardTitle}><div><small>BASE PROPIA</small><h3>Clientes creados por nuevas gestiones</h3></div><button onClick={() => { setManagementType("Cliente"); setModalOpen(true); }}>+ Registrar cliente</button></div>{data.customers.length ? data.customers.map((item) => <div className={styles.dataRow} key={item.id}><strong>{item.full_name}</strong><span>{item.phone}</span><span>{item.address || "Sin dirección"}</span><span>{item.source || "crm"}</span></div>) : empty("La base está vacía. Se llenará con WhatsApp, llamadas y atención presencial.")}</section>}
+      {!loading && active === "Productos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>CATÁLOGO CONTROLADO</small><h3>Productos, equipos y piezas</h3></div><div style={{display:"flex",gap:8}}><label className={styles.importButton}>Importar CSV<input hidden type="file" accept=".csv,text/csv" onChange={importCatalog}/></label><button onClick={() => { setManagementType("Producto"); setModalOpen(true); }}>+ Registrar</button></div></div>{data.products.length ? data.products.map((item) => <div className={styles.product} key={item.id}><div><strong>{item.piece_name || item.name}</strong><small>{item.category || "General"} · {item.brand || "Sin marca"} · {item.model || "Sin modelo"}</small><p>{item.description || "Sin descripción"}</p></div><div><b>{money(item.sale_price ?? item.price)}</b><span>Mínimo: {money(item.minimum_authorized_price)} · Stock: {Math.max(0,item.stock-item.reserved_stock)}</span></div></div>) : empty("No hay catálogo. Usa Importar CSV o Registrar.")}</section>}
+      {!loading && active === "Técnicos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>EQUIPO DE CAMPO</small><h3>Técnicos y WhatsApp</h3></div><button onClick={() => { setManagementType("Técnico"); setModalOpen(true); }}>+ Agregar técnico</button></div>{data.technicians.length ? data.technicians.map((item) => <div className={styles.technicianRow} key={item.id}><div><strong>{item.full_name}</strong><p>{item.phone || "Sin teléfono"} · {(item.specialties || []).join(", ") || "Sin especialidad"}</p></div><span>{item.status}</span><span>{item.whatsapp_enabled ? "WhatsApp activo" : "Sin WhatsApp"}</span></div>) : empty("No hay técnicos registrados.")}</section>}
+      {!loading && active === "Agenda" && <section className={styles.card}><div className={styles.cardTitle}><div><small>AGENDA</small><h3>Citas reales</h3></div><button onClick={() => { setManagementType("Cita"); setModalOpen(true); }}>+ Crear cita</button></div>{data.appointments.length ? data.appointments.map((item) => <div className={styles.scheduleRow} key={item.id}><div><strong>{new Date(item.starts_at).toLocaleString("es-DO")}</strong><p>{item.notes || "Servicio"} · {item.address || "Sin dirección"}</p></div><span>{techniciansById.get(item.technician_id || "")?.full_name || "Sin técnico"}</span><span>{item.technician_confirmation_status || item.status}</span></div>) : empty("No hay citas registradas.")}</section>}
+      {!loading && active === "Órdenes" && <section className={styles.card}><div className={styles.cardTitle}><div><small>SERVICIO TÉCNICO</small><h3>Órdenes reales</h3></div><button onClick={() => { setManagementType("Orden"); setModalOpen(true); }}>+ Crear orden</button></div>{data.work_orders.length ? data.work_orders.map((item) => <div className={styles.dataRow} key={item.id}><strong>{item.order_number}</strong><span>{customersById.get(item.customer_id || "")?.full_name || "Cliente no vinculado"}</span><span>{item.equipment || "Equipo"}: {item.issue || "Sin falla"}</span><span>{item.status}</span></div>) : empty("No hay órdenes registradas.")}</section>}
+      {!loading && active === "Cotizaciones" && <section className={styles.card}><div className={styles.cardTitle}><div><small>COMERCIAL</small><h3>Cotizaciones</h3></div><button onClick={() => { setManagementType("Cotización"); setModalOpen(true); }}>+ Crear cotización</button></div>{data.quotes.length ? data.quotes.map((item) => <div className={styles.dataRow} key={item.id}><strong>{item.quote_number}</strong><span>{customersById.get(item.customer_id || "")?.full_name || "Cliente"}</span><span>{money(item.total)}</span><span>{item.status}</span></div>) : empty("No hay cotizaciones registradas.")}</section>}
+      {!loading && active === "Ventas" && <section className={styles.card}><div className={styles.cardTitle}><div><small>VENTAS</small><h3>Oportunidades y ventas</h3></div><button onClick={() => { setManagementType("Venta"); setModalOpen(true); }}>+ Registrar venta</button></div>{data.sales.length ? data.sales.map((item) => <div className={styles.dataRow} key={item.id}><strong>{customersById.get(item.customer_id || "")?.full_name || "Cliente"}</strong><span>{item.quantity} unidad(es)</span><span>{money(item.unit_price)}</span><span>{item.status}</span></div>) : empty("No hay ventas registradas.")}</section>}
 
-        {active === "Conversaciones" && <section className={styles.card}><div className={styles.cardTitle}><div><small>BANDEJA OMNICANAL</small><h3>WhatsApp, llamadas y web</h3></div></div>{conversations.map((item) => <div className={styles.conversation} key={`${item.customer}-${item.time}`}><div className={styles.channel}>{item.channel === "WhatsApp" ? "W" : "☎"}</div><div><strong>{item.customer}</strong><p>{item.text}</p></div><div><span>{item.intent}</span><small>{item.time}</small></div></div>)}</section>}
-
-        {active === "Clientes" && <section className={styles.card}><div className={styles.cardTitle}><div><small>BASE DE CLIENTES</small><h3>Clientes registrados</h3></div><button onClick={() => openManagement("Cliente")}>+ Registrar cliente</button></div><div className={styles.tableHeader}><span>Cliente</span><span>Teléfono</span><span>Dirección</span><span>Origen</span></div>{customers.map((item) => <div className={styles.dataRow} key={item.id}><div><strong>{item.name}</strong><small>{item.id}</small></div><span>{item.phone}</span><span>{item.address}</span><span>{item.source}</span></div>)}</section>}
-
-        {active === "Agenda" && <section className={styles.card}><div className={styles.cardTitle}><div><small>CONTROL OPERATIVO</small><h3>Agenda y reasignación de técnicos</h3></div><button onClick={() => openManagement("Cita")}>+ Crear cita</button></div>{appointments.map((item) => <div className={styles.scheduleRow} key={item.id}><div><strong>{item.time} · {item.customer}</strong><p>{item.service} · {item.zone}</p></div><select value={item.technicianId} onChange={(event) => reassign(item.id, event.target.value)}>{technicians.filter((tech) => tech.status !== "No disponible").map((tech) => <option key={tech.id} value={tech.id}>{tech.name} · {tech.status}</option>)}</select><span>{item.status}</span></div>)}</section>}
-
-        {active === "Técnicos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>EQUIPO DE CAMPO</small><h3>Disponibilidad de técnicos</h3></div></div>{technicians.map((tech) => <div className={styles.technicianRow} key={tech.id}><div><strong>{tech.name}</strong><p>{tech.specialty}</p></div><span>{tech.status}</span><button onClick={() => toggleAvailability(tech.id)}>{tech.status === "No disponible" ? "Marcar disponible" : "Marcar no disponible"}</button></div>)}</section>}
-
-        {active === "Productos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>INVENTARIO Y CATÁLOGO</small><h3>Productos, equipos y piezas</h3></div><button onClick={() => openManagement("Producto")}>+ Registrar producto</button></div><div className={styles.tableHeader}><span>Producto</span><span>Categoría</span><span>Precio</span><span>Existencia</span></div>{products.map((item) => <div className={styles.dataRow} key={item.id}><div><strong>{item.name}</strong><small>{item.brand} · {item.id}</small></div><span>{item.category}</span><span>{item.price}</span><span>{item.stock - item.reserved} disponibles</span></div>)}</section>}
-
-        {active === "Órdenes" && <section className={styles.card}><div className={styles.cardTitle}><div><small>SERVICIO TÉCNICO</small><h3>Órdenes de trabajo</h3></div><button onClick={() => openManagement("Orden")}>+ Crear orden</button></div><div className={styles.tableHeader}><span>Orden y cliente</span><span>Equipo</span><span>Estado</span><span>Técnico</span></div>{orders.map((item) => <div className={styles.dataRow} key={item.id}><div><strong>{item.id}</strong><small>{item.customer} · {item.issue}</small></div><span>{item.equipment}</span><span>{item.status}</span><span>{item.technician}</span></div>)}</section>}
-
-        {active === "Ventas" && <section className={styles.card}><div className={styles.cardTitle}><div><small>GESTIÓN COMERCIAL</small><h3>Ventas y oportunidades</h3></div><button onClick={() => openManagement("Venta")}>+ Registrar venta</button></div><div className={styles.tableHeader}><span>Cliente</span><span>Producto</span><span>Monto</span><span>Estado</span></div>{sales.map((item) => <div className={styles.dataRow} key={item.id}><div><strong>{item.customer}</strong><small>{item.id}</small></div><span>{item.product}</span><span>{item.amount}</span><span>{item.status}</span></div>)}</section>}
-
-        {active === "Cotizaciones" && <section className={styles.card}><div className={styles.cardTitle}><div><small>PROPUESTAS COMERCIALES</small><h3>Cotizaciones</h3></div><button onClick={() => openManagement("Cotización")}>+ Nueva cotización</button></div><div className={styles.tableHeader}><span>Cliente</span><span>Concepto</span><span>Total</span><span>Estado</span></div>{quotes.map((item) => <div className={styles.dataRow} key={item.id}><div><strong>{item.customer}</strong><small>{item.id}</small></div><span>{item.concept}</span><span>{item.total}</span><span>{item.status}</span></div>)}</section>}
-      </section>
-
-      {modalOpen && <div className={styles.modalBackdrop} onMouseDown={() => setModalOpen(false)}><section className={styles.modal} onMouseDown={(event) => event.stopPropagation()}><div className={styles.modalHeader}><div><small>NUEVA GESTIÓN PRESENCIAL</small><h2>Registrar {managementType.toLowerCase()}</h2></div><button onClick={() => setModalOpen(false)}>×</button></div><div className={styles.typeGrid}>{(["Cliente","Producto","Cita","Orden","Cotización","Venta"] as ManagementType[]).map((type) => <button className={managementType === type ? styles.selectedType : ""} key={type} onClick={() => setManagementType(type)}>{type}</button>)}</div><form onSubmit={submitManagement}><label>{labelMap[managementType][0]}<input name="name" required /></label><label>{labelMap[managementType][1]}<input name="detail" /></label><label>{labelMap[managementType][2]}<input name="secondary" /></label><div className={styles.modalActions}><button type="button" onClick={() => setModalOpen(false)}>Cancelar</button><button type="submit">Guardar gestión</button></div></form></section></div>}
-    </main>
-  );
+      {modalOpen && <div className={styles.modalBackdrop}><section className={styles.modal}><div className={styles.modalHeader}><div><small>NUEVA GESTIÓN</small><h3>{managementType}</h3></div><button onClick={() => setModalOpen(false)}>×</button></div><div className={styles.typeGrid}>{(["Cliente","Producto","Cita","Orden","Cotización","Venta","Técnico"] as ManagementType[]).map((item) => <button type="button" className={managementType===item?styles.selectedType:""} key={item} onClick={() => setManagementType(item)}>{item}</button>)}</div><form className={styles.managementForm} onSubmit={submitManagement}><label>{labels[managementType][0]}<input name="name" required/></label><label>{labels[managementType][1]}<input name="detail"/></label><label>{labels[managementType][2]}<input name="secondary" type={managementType==="Cita"?"datetime-local":"text"}/></label><div className={styles.formActions}><button type="button" onClick={() => setModalOpen(false)}>Cancelar</button><button type="submit">Guardar en Supabase</button></div></form></section></div>}
+    </section>
+  </main>;
 }
