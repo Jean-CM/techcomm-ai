@@ -25,17 +25,12 @@ export async function POST(request: Request) {
   const detail = clean(body.detail);
   const secondary = clean(body.secondary);
 
-  if (!type || !name) {
-    return NextResponse.json({ ok: false, error: "type and name are required" }, { status: 400 });
-  }
-
+  if (!type || !name) return NextResponse.json({ ok: false, error: "type and name are required" }, { status: 400 });
   const supabase = getSupabaseAdmin();
 
   if (type === "Cliente") {
     const phone = normalizePhone(detail);
-    if (!/^(809|829|849)\d{7}$/.test(phone)) {
-      return NextResponse.json({ ok: false, error: "El teléfono debe tener 10 dígitos y comenzar con 809, 829 o 849." }, { status: 400 });
-    }
+    if (!/^(809|829|849)\d{7}$/.test(phone)) return NextResponse.json({ ok: false, error: "El teléfono debe tener 10 dígitos y comenzar con 809, 829 o 849." }, { status: 400 });
     const { data, error } = await supabase.from("customers").upsert({ full_name: name, phone, address: secondary || null, source: "presencial", updated_at: new Date().toISOString() }, { onConflict: "phone" }).select().single();
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, record: data });
@@ -49,11 +44,14 @@ export async function POST(request: Request) {
 
   if (type === "Técnico") {
     const phone = normalizePhone(detail);
-    if (!/^(809|829|849)\d{7}$/.test(phone)) {
-      return NextResponse.json({ ok: false, error: "El teléfono del técnico debe tener 10 dígitos y comenzar con 809, 829 o 849." }, { status: 400 });
-    }
+    if (!/^(809|829|849)\d{7}$/.test(phone)) return NextResponse.json({ ok: false, error: "El teléfono de WhatsApp debe tener 10 dígitos y comenzar con 809, 829 o 849." }, { status: 400 });
     const specialties = secondary ? secondary.split(",").map((item) => item.trim()).filter(Boolean) : [];
-    const { data, error } = await supabase.from("technicians").insert({ full_name: name, phone, specialties, zones: [], status: "available", active: true, whatsapp_enabled: true, notification_status: "ready" }).select().single();
+    const { data: existing } = await supabase.from("technicians").select("id").eq("phone", phone).maybeSingle();
+    const values = { full_name: name, phone, specialties, zones: [], status: "available", active: true, whatsapp_enabled: true, notification_status: "ready" };
+    const query = existing?.id
+      ? supabase.from("technicians").update(values).eq("id", existing.id)
+      : supabase.from("technicians").insert(values);
+    const { data, error } = await query.select().single();
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, record: data });
   }
