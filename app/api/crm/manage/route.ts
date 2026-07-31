@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     if (!/^(809|829|849)\d{7}$/.test(phone)) return NextResponse.json({ ok: false, error: "El teléfono de WhatsApp debe tener 10 dígitos y comenzar con 809, 829 o 849." }, { status: 400 });
     const specialties = secondary ? secondary.split(",").map((item) => item.trim()).filter(Boolean) : [];
     const { data: existing } = await supabase.from("technicians").select("id").eq("phone", phone).maybeSingle();
-    const values = { full_name: name, phone, specialties, zones: [], status: "available", active: true, whatsapp_enabled: true, notification_status: "ready" };
+    const values = { full_name: name, phone, specialties, zones: [], status: "available", active: true, whatsapp_enabled: true, notification_status: "pending" };
     const query = existing?.id
       ? supabase.from("technicians").update(values).eq("id", existing.id)
       : supabase.from("technicians").insert(values);
