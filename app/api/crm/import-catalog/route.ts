@@ -22,18 +22,18 @@ function text(value: unknown) {
 }
 
 function num(value: unknown) {
-  const normalized = text(value).replace(/RD\$|\$|,/g, "").replace(/%$/, "");
+  const normalized = text(value).replace(/RD\$|\$|,/gi, "").replace(/%$/, "");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function percentage(value: unknown) {
   const raw = num(value);
-  return raw > 1 ? raw / 100 : raw;
+  return Math.max(0, Math.min(1, raw > 1 ? raw / 100 : raw));
 }
 
 function slug(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36);
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32);
 }
 
 export async function POST(request: Request) {
@@ -42,42 +42,55 @@ export async function POST(request: Request) {
   if (!rows.length) return NextResponse.json({ ok: false, error: "No se recibieron filas para importar." }, { status: 400 });
   if (rows.length > 2000) return NextResponse.json({ ok: false, error: "El archivo supera el límite de 2,000 filas por carga." }, { status: 400 });
 
-  const valid = rows.map((row, index) => {
+  const rejected: { row: number; reason: string }[] = [];
+  const valid = rows.flatMap((row, index) => {
     const brand = text(row.marca);
     const model = text(row.modelo);
     const name = text(row.pieza);
+    if (!name) {
+      rejected.push({ row: index + 2, reason: "Falta Pieza" });
+      return [];
+    }
+
     const salePrice = num(row.precio_venta);
     const maxDiscount = percentage(row.descuento_maximo);
-    const minimumPrice = num(row.precio_minimo_autorizado) || salePrice * (1 - maxDiscount);
     const stock = Math.max(0, Math.floor(num(row.stock_total)));
     const reserved = Math.max(0, Math.min(stock, Math.floor(num(row.stock_reservado))));
-    const sku = `IMP-${slug(brand || "GEN")}-${slug(model || name || String(index + 1))}-${index + 1}`;
-    return {
+    const skuBase = [brand || "GEN", model || "SIN-MODELO", name].map(slug).filter(Boolean).join("-");
+    const sku = `IMP-${skuBase}`.slice(0, 96);
+
+    return [{
       sku,
       name,
       category: text(row.categoria) || "General",
       brand: brand || null,
       model: model || null,
-      item_type: "catalog",
-      piece_name: name || null,
+      item_type: text(row.categoria).toLowerCase().includes("pieza") ? "piece" : "product",
+      piece_name: name,
       description: text(row.descripcion) || null,
       unit_cost: num(row.costo_unitario),
       sale_price: salePrice,
       price: salePrice,
       max_discount_pct: maxDiscount,
-      minimum_authorized_price: minimumPrice,
       currency: "DOP",
       stock,
       reserved_stock: reserved,
-      active: text(row.estado).toLowerCase() !== "inactivo",
-    };
-  }).filter((row) => row.name);
+      active: !["inactivo", "descontinuado"].includes(text(row.estado).toLowerCase()),
+      updated_at: new Date().toISOString(),
+    }];
+  });
 
-  if (!valid.length) return NextResponse.json({ ok: false, error: "Ninguna fila contiene el campo Pieza." }, { status: 400 });
+  if (!valid.length) return NextResponse.json({ ok: false, error: "Ninguna fila válida contiene el campo Pieza.", rejected }, { status: 400 });
 
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.from("products").upsert(valid, { onConflict: "sku" }).select("id");
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  const { data, error } = await supabase.from("products").upsert(valid, { onConflict: "sku" }).select("id,sku");
+  if (error) return NextResponse.json({ ok: false, error: error.message, rejected }, { status: 500 });
 
-  return NextResponse.json({ ok: true, imported: data?.length ?? valid.length, rejected: rows.length - valid.length, source: payload.source ?? "archivo" });
+  return NextResponse.json({
+    ok: true,
+    imported: data?.length ?? valid.length,
+    rejected: rejected.length,
+    rejected_rows: rejected.slice(0, 25),
+    source: payload.source ?? "archivo",
+  });
 }
