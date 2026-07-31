@@ -22,28 +22,6 @@ function money(value?: number | null) {
   return new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP", maximumFractionDigits: 2 }).format(value);
 }
 
-function parseCsv(text: string) {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) return [];
-  const split = (line: string) => {
-    const values: string[] = [];
-    let current = "";
-    let quoted = false;
-    for (let i = 0; i < line.length; i += 1) {
-      const char = line[i];
-      if (char === '"' && line[i + 1] === '"') { current += '"'; i += 1; }
-      else if (char === '"') quoted = !quoted;
-      else if (char === "," && !quoted) { values.push(current.trim()); current = ""; }
-      else current += char;
-    }
-    values.push(current.trim());
-    return values;
-  };
-  const normalize = (value: string) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-  const headers = split(lines[0]).map(normalize);
-  return lines.slice(1).map((line) => { const values = split(line); return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])); });
-}
-
 export default function CrmPage() {
   const [active, setActive] = useState("Dashboard");
   const [data, setData] = useState<Overview>(emptyOverview);
@@ -59,8 +37,11 @@ export default function CrmPage() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? payload.errors?.join(", ") ?? "No fue posible cargar el CRM.");
       setData(payload);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Error al cargar el CRM."); }
-    finally { setLoading(false); }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Error al cargar el CRM.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -73,7 +54,11 @@ export default function CrmPage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setMessage("Guardando...");
-    const response = await fetch("/api/crm/manage", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: managementType, name: form.get("name"), detail: form.get("detail"), secondary: form.get("secondary") }) });
+    const response = await fetch("/api/crm/manage", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: managementType, name: form.get("name"), detail: form.get("detail"), secondary: form.get("secondary") }),
+    });
     const payload = await response.json();
     if (!response.ok) { setMessage(payload.error ?? "No fue posible guardar."); return; }
     setModalOpen(false);
@@ -86,35 +71,55 @@ export default function CrmPage() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".csv")) { setMessage("El importador directo acepta CSV. Abre la plantilla en Excel y guárdala como CSV UTF-8."); return; }
-    const rows = parseCsv(await file.text());
-    if (!rows.length) { setMessage("El archivo no contiene filas válidas."); return; }
-    setMessage(`Importando ${rows.length} filas...`);
-    const response = await fetch("/api/crm/import-catalog", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ rows, source: file.name }) });
+    const form = new FormData();
+    form.append("file", file);
+    setMessage(`Importando ${file.name}...`);
+    const response = await fetch("/api/crm/import", { method: "POST", body: form });
     const payload = await response.json();
     if (!response.ok) { setMessage(payload.error ?? "No fue posible importar."); return; }
-    setMessage(`Importación completada: ${payload.imported} registros.`);
+    setMessage(`Importación completada: ${payload.imported} registros procesados.`);
     await load();
   }
 
   const labels: Record<ManagementType, [string, string, string]> = {
-    Cliente: ["Nombre completo", "Teléfono", "Dirección o sector"], Producto: ["Nombre o pieza", "Categoría", "Marca o modelo"], Cita: ["Nombre del cliente", "Servicio", "Fecha y hora"], Orden: ["Nombre del cliente", "Falla", "Equipo"], Cotización: ["Nombre del cliente", "Concepto", "Monto"], Venta: ["Nombre del cliente", "Producto", "Monto"], Técnico: ["Nombre completo", "Teléfono WhatsApp", "Especialidades separadas por coma"],
+    Cliente: ["Nombre completo", "Teléfono", "Dirección o sector"],
+    Producto: ["Nombre o pieza", "Categoría", "Marca o modelo"],
+    Cita: ["Nombre del cliente", "Servicio", "Fecha y hora"],
+    Orden: ["Nombre del cliente", "Falla", "Equipo"],
+    Cotización: ["Nombre del cliente", "Concepto", "Monto"],
+    Venta: ["Nombre del cliente", "Producto", "Monto"],
+    Técnico: ["Nombre completo", "Teléfono WhatsApp", "Especialidades separadas por coma"],
   };
   const empty = (text: string) => <div className={styles.placeholder}><p>{text}</p></div>;
 
   return <main className={styles.shell}>
-    <aside className={styles.sidebar}><div><span className={styles.brand}>TECHCOMM AI</span><h2>Techcomm 360</h2><p>Centro de operaciones omnicanal</p></div><nav>{menu.map((item) => <button className={active === item ? styles.active : ""} key={item} onClick={() => setActive(item)}>{item}</button>)}</nav><div className={styles.channelStatus}><span /> Datos en Supabase<br/><span /> WhatsApp y voz conectados</div></aside>
+    <aside className={styles.sidebar}>
+      <div><span className={styles.brand}>TECHCOMM AI</span><h2>Techcomm Operations</h2><p>Centro de operaciones omnicanal</p></div>
+      <nav>{menu.map((item) => <button className={active === item ? styles.active : ""} key={item} onClick={() => setActive(item)}>{item}</button>)}</nav>
+      <div className={styles.channelStatus}><span /> Datos en Supabase<br/><span /> WhatsApp y voz conectados</div>
+    </aside>
     <section className={styles.content}>
       <header className={styles.header}><div><small>OPERACIÓN EN TIEMPO REAL</small><h1>{active}</h1></div><div className={styles.headerActions}><button onClick={() => { setManagementType("Cliente"); setModalOpen(true); }}>+ Nueva gestión</button><div className={styles.avatar}>JC</div></div></header>
       {message && <section className={styles.card} style={{ marginBottom: 16, padding: 12 }}>{message}</section>}
       {loading && empty("Cargando información desde Supabase...")}
 
-      {!loading && active === "Dashboard" && <><div className={styles.metrics}><article><small>Llamadas registradas</small><strong>{data.call_events.length}</strong><span>ElevenLabs + Supabase</span></article><article><small>Citas</small><strong>{data.appointments.length}</strong><span>Agenda real</span></article><article><small>Órdenes</small><strong>{data.work_orders.length}</strong><span>RD$500 por visita</span></article><article><small>Técnicos disponibles</small><strong>{available}</strong><span>{data.technicians.length} registrados</span></article></div><div className={styles.gridTwo}><section className={styles.card}><div className={styles.cardTitle}><div><small>CONVERSACIONES</small><h3>Llamadas recientes</h3></div><button onClick={() => setActive("Conversaciones")}>Ver todas</button></div>{data.call_events.length ? data.call_events.slice(0,4).map((item) => <div className={styles.conversation} key={item.id}><div className={styles.channel}>☎</div><div><strong>{item.customer_phone || "Contacto sin identificar"}</strong><p>{item.summary || "Sin resumen"}</p></div><div><span>{item.status || "procesada"}</span><small>{new Date(item.created_at).toLocaleString("es-DO")}</small></div></div>) : empty("Aún no hay llamadas registradas.")}</section><section className={styles.card}><div className={styles.cardTitle}><div><small>INVENTARIO</small><h3>Productos y piezas</h3></div><button onClick={() => setActive("Productos")}>Abrir catálogo</button></div>{data.products.length ? data.products.slice(0,4).map((item) => <div className={styles.product} key={item.id}><div><strong>{item.piece_name || item.name}</strong><small>{item.brand || "Sin marca"} · {item.model || "Sin modelo"}</small></div><div><b>{money(item.sale_price ?? item.price)}</b><span>{Math.max(0,item.stock-item.reserved_stock)} disponibles</span></div></div>) : empty("Importa el catálogo para comenzar.")}</section></div></>}
+      {!loading && active === "Dashboard" && <>
+        <div className={styles.metrics}>
+          <article><small>Llamadas registradas</small><strong>{data.call_events.length}</strong><span>ElevenLabs + Supabase</span></article>
+          <article><small>Citas</small><strong>{data.appointments.length}</strong><span>Agenda real</span></article>
+          <article><small>Órdenes</small><strong>{data.work_orders.length}</strong><span>RD$500 por visita</span></article>
+          <article><small>Técnicos disponibles</small><strong>{available}</strong><span>{data.technicians.length} registrados</span></article>
+        </div>
+        <div className={styles.gridTwo}>
+          <section className={styles.card}><div className={styles.cardTitle}><div><small>CONVERSACIONES</small><h3>Llamadas recientes</h3></div><button onClick={() => setActive("Conversaciones")}>Ver todas</button></div>{data.call_events.length ? data.call_events.slice(0,4).map((item) => <div className={styles.conversation} key={item.id}><div className={styles.channel}>☎</div><div><strong>{item.customer_phone || "Contacto sin identificar"}</strong><p>{item.summary || "Sin resumen"}</p></div><div><span>{item.status || "procesada"}</span><small>{new Date(item.created_at).toLocaleString("es-DO")}</small></div></div>) : empty("Aún no hay llamadas registradas.")}</section>
+          <section className={styles.card}><div className={styles.cardTitle}><div><small>INVENTARIO</small><h3>Productos y piezas</h3></div><button onClick={() => setActive("Productos")}>Abrir catálogo</button></div>{data.products.length ? data.products.slice(0,4).map((item) => <div className={styles.product} key={item.id}><div><strong>{item.piece_name || item.name}</strong><small>{item.brand || "Sin marca"} · {item.model || "Sin modelo"}</small></div><div><b>{money(item.sale_price ?? item.price)}</b><span>{Math.max(0,item.stock-item.reserved_stock)} disponibles</span></div></div>) : empty("Importa el catálogo para comenzar.")}</section>
+        </div>
+      </>}
 
       {!loading && active === "Conversaciones" && <section className={styles.card}><div className={styles.cardTitle}><div><small>ELEVENLABS + SUPABASE</small><h3>Llamadas registradas</h3></div></div>{data.call_events.length ? data.call_events.map((item) => <div className={styles.conversation} key={item.id}><div className={styles.channel}>☎</div><div><strong>{item.customer_phone || item.conversation_id}</strong><p>{item.summary || "Sin resumen disponible"}</p></div><div><span>{item.status || "done"}</span><small>{new Date(item.created_at).toLocaleString("es-DO")}</small></div></div>) : empty("No hay conversaciones registradas.")}</section>}
       {!loading && active === "Clientes" && <section className={styles.card}><div className={styles.cardTitle}><div><small>BASE PROPIA</small><h3>Clientes creados por nuevas gestiones</h3></div><button onClick={() => { setManagementType("Cliente"); setModalOpen(true); }}>+ Registrar cliente</button></div>{data.customers.length ? data.customers.map((item) => <div className={styles.dataRow} key={item.id}><strong>{item.full_name}</strong><span>{item.phone}</span><span>{item.address || "Sin dirección"}</span><span>{item.source || "crm"}</span></div>) : empty("La base está vacía. Se llenará con WhatsApp, llamadas y atención presencial.")}</section>}
-      {!loading && active === "Productos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>CATÁLOGO CONTROLADO</small><h3>Productos, equipos y piezas</h3></div><div style={{display:"flex",gap:8}}><label className={styles.importButton}>Importar CSV<input hidden type="file" accept=".csv,text/csv" onChange={importCatalog}/></label><button onClick={() => { setManagementType("Producto"); setModalOpen(true); }}>+ Registrar</button></div></div>{data.products.length ? data.products.map((item) => <div className={styles.product} key={item.id}><div><strong>{item.piece_name || item.name}</strong><small>{item.category || "General"} · {item.brand || "Sin marca"} · {item.model || "Sin modelo"}</small><p>{item.description || "Sin descripción"}</p></div><div><b>{money(item.sale_price ?? item.price)}</b><span>Mínimo: {money(item.minimum_authorized_price)} · Stock: {Math.max(0,item.stock-item.reserved_stock)}</span></div></div>) : empty("No hay catálogo. Usa Importar CSV o Registrar.")}</section>}
-      {!loading && active === "Técnicos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>EQUIPO DE CAMPO</small><h3>Técnicos y WhatsApp</h3></div><button onClick={() => { setManagementType("Técnico"); setModalOpen(true); }}>+ Agregar técnico</button></div>{data.technicians.length ? data.technicians.map((item) => <div className={styles.technicianRow} key={item.id}><div><strong>{item.full_name}</strong><p>{item.phone || "Sin teléfono"} · {(item.specialties || []).join(", ") || "Sin especialidad"}</p></div><span>{item.status}</span><span>{item.whatsapp_enabled ? "WhatsApp activo" : "Sin WhatsApp"}</span></div>) : empty("No hay técnicos registrados.")}</section>}
+      {!loading && active === "Productos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>CATÁLOGO CONTROLADO</small><h3>Productos, equipos y piezas</h3></div><div style={{display:"flex",gap:8}}><label className={styles.importButton}>Importar XLSX/CSV<input hidden type="file" accept=".xlsx,.xls,.csv" onChange={importCatalog}/></label><button onClick={() => { setManagementType("Producto"); setModalOpen(true); }}>+ Registrar</button></div></div>{data.products.length ? data.products.map((item) => <div className={styles.product} key={item.id}><div><strong>{item.piece_name || item.name}</strong><small>{item.category || "General"} · {item.brand || "Sin marca"} · {item.model || "Sin modelo"}</small><p>{item.description || "Sin descripción"}</p></div><div><b>{money(item.sale_price ?? item.price)}</b><span>Mínimo: {money(item.minimum_authorized_price)} · Stock: {Math.max(0,item.stock-item.reserved_stock)}</span></div></div>) : empty("No hay catálogo. Usa Importar XLSX/CSV o Registrar.")}</section>}
+      {!loading && active === "Técnicos" && <section className={styles.card}><div className={styles.cardTitle}><div><small>EQUIPO DE CAMPO</small><h3>Técnicos y WhatsApp</h3></div><button onClick={() => { setManagementType("Técnico"); setModalOpen(true); }}>+ Agregar técnico</button></div>{data.technicians.length ? data.technicians.map((item) => <div className={styles.technicianRow} key={item.id}><div><strong>{item.full_name}</strong><p>{item.phone || "Sin teléfono"} · {(item.specialties || []).join(", ") || "Sin especialidad"}</p></div><span>{item.status}</span><span>{item.whatsapp_enabled ? "WhatsApp activo" : "Sin WhatsApp"}</span></div>) : empty("No hay técnicos registrados. Usa Agregar técnico.")}</section>}
       {!loading && active === "Agenda" && <section className={styles.card}><div className={styles.cardTitle}><div><small>AGENDA</small><h3>Citas reales</h3></div><button onClick={() => { setManagementType("Cita"); setModalOpen(true); }}>+ Crear cita</button></div>{data.appointments.length ? data.appointments.map((item) => <div className={styles.scheduleRow} key={item.id}><div><strong>{new Date(item.starts_at).toLocaleString("es-DO")}</strong><p>{item.notes || "Servicio"} · {item.address || "Sin dirección"}</p></div><span>{techniciansById.get(item.technician_id || "")?.full_name || "Sin técnico"}</span><span>{item.technician_confirmation_status || item.status}</span></div>) : empty("No hay citas registradas.")}</section>}
       {!loading && active === "Órdenes" && <section className={styles.card}><div className={styles.cardTitle}><div><small>SERVICIO TÉCNICO</small><h3>Órdenes reales</h3></div><button onClick={() => { setManagementType("Orden"); setModalOpen(true); }}>+ Crear orden</button></div>{data.work_orders.length ? data.work_orders.map((item) => <div className={styles.dataRow} key={item.id}><strong>{item.order_number}</strong><span>{customersById.get(item.customer_id || "")?.full_name || "Cliente no vinculado"}</span><span>{item.equipment || "Equipo"}: {item.issue || "Sin falla"}</span><span>{item.status}</span></div>) : empty("No hay órdenes registradas.")}</section>}
       {!loading && active === "Cotizaciones" && <section className={styles.card}><div className={styles.cardTitle}><div><small>COMERCIAL</small><h3>Cotizaciones</h3></div><button onClick={() => { setManagementType("Cotización"); setModalOpen(true); }}>+ Crear cotización</button></div>{data.quotes.length ? data.quotes.map((item) => <div className={styles.dataRow} key={item.id}><strong>{item.quote_number}</strong><span>{customersById.get(item.customer_id || "")?.full_name || "Cliente"}</span><span>{money(item.total)}</span><span>{item.status}</span></div>) : empty("No hay cotizaciones registradas.")}</section>}
