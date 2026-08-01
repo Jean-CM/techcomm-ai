@@ -15,6 +15,16 @@ function num(value: unknown) {
 function pct(value: unknown) { const valueNumber = num(value); return valueNumber > 1 ? valueNumber / 100 : valueNumber; }
 function slug(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36); }
 
+function extractRows(sheet: XLSX.WorkSheet): Row[] {
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+  const headerIndex = matrix.findIndex((row) => Array.isArray(row) && row.some((cell) => normalize(text(cell)) === "pieza"));
+  if (headerIndex < 0) return [];
+  const headers = (matrix[headerIndex] as unknown[]).map((cell) => normalize(text(cell)));
+  return matrix.slice(headerIndex + 1)
+    .filter((row) => Array.isArray(row) && row.some((cell) => text(cell)))
+    .map((row) => Object.fromEntries(headers.map((header, index) => [header, (row as unknown[])[index] ?? ""])));
+}
+
 export async function POST(request: Request) {
   const form = await request.formData();
   const file = form.get("file");
@@ -25,9 +35,8 @@ export async function POST(request: Request) {
   const sheetName = workbook.SheetNames.find((name) => normalize(name) === "catalogo") ?? workbook.SheetNames[0];
   if (!sheetName) return NextResponse.json({ ok: false, error: "El archivo no contiene hojas." }, { status: 400 });
 
-  const raw = XLSX.utils.sheet_to_json<Row>(workbook.Sheets[sheetName], { defval: "" });
-  const rows = raw.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [normalize(key), value])));
-  if (!rows.length) return NextResponse.json({ ok: false, error: "La hoja no contiene filas de catálogo." }, { status: 400 });
+  const rows = extractRows(workbook.Sheets[sheetName]);
+  if (!rows.length) return NextResponse.json({ ok: false, error: "No se encontró la fila de encabezados. Verifica que exista la columna Pieza." }, { status: 400 });
 
   const valid = rows.map((row, index) => {
     const brand = text(row.marca);
@@ -55,7 +64,7 @@ export async function POST(request: Request) {
       currency: "DOP",
       stock,
       reserved_stock: reserved,
-      active: text(row.estado).toLowerCase() !== "inactivo",
+      active: !["inactivo", "descontinuado"].includes(text(row.estado).toLowerCase()),
     };
   }).filter((row) => row.name);
 
