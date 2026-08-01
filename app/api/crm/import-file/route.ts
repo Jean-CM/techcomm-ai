@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type Row = Record<string, unknown>;
+type ItemType = "product" | "equipment" | "part" | "accessory";
 
 function normalize(value: string) {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -14,6 +15,14 @@ function num(value: unknown) {
 }
 function pct(value: unknown) { const valueNumber = num(value); return valueNumber > 1 ? valueNumber / 100 : valueNumber; }
 function slug(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36); }
+
+function detectItemType(category: string, name: string): ItemType {
+  const source = `${category} ${name}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/pieza|repuesto|pantalla|panel|tarjeta|motor|bateria|sensor|compresor|capacitor|correa|valvula|led|puerto|quemador|encendedor|aspa|seguro|flex|modulo/.test(source)) return "part";
+  if (/accesorio|cargador|cable|control remoto|protector|cover|carcasa|adaptador/.test(source)) return "accessory";
+  if (/televisor|aire acondicionado|lavadora|lava y seca|estufa|abanico|nevera|refrigerador|telefono movil|smartphone|laptop|computadora/.test(source)) return "equipment";
+  return "product";
+}
 
 function extractRows(sheet: XLSX.WorkSheet): Row[] {
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
@@ -56,7 +65,7 @@ export async function POST(request: Request) {
       category,
       brand: brand || null,
       model: model || null,
-      item_type: /pieza|repuesto|pantalla|tarjeta|motor|bateria|sensor|compresor|capacitor|correa|valvula|led|puerto|quemador|encendedor|aspa/i.test(`${category} ${name}`) ? "piece" : "product",
+      item_type: detectItemType(category, name),
       unit_cost: num(row.costo_unitario),
       sale_price: salePrice,
       price: salePrice,
