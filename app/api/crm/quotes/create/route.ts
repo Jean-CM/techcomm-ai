@@ -22,8 +22,8 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseAdmin();
   const [{ data: customer, error: customerError }, { data: product, error: productError }] = await Promise.all([
-    supabase.from("customers").select("id,full_name,phone").eq("id", body.customer_id).single(),
-    supabase.from("products").select("id,name,piece_name,sale_price,price,max_discount_pct,minimum_authorized_price,installation_price,delivery_price,installation_includes_delivery,stock,reserved_stock").eq("id", body.product_id).single(),
+    supabase.from("customers").select("id,full_name,phone,address,sector").eq("id", body.customer_id).single(),
+    supabase.from("products").select("id,name,piece_name,description,sale_price,price,max_discount_pct,minimum_authorized_price,installation_price,delivery_price,installation_includes_delivery,stock,reserved_stock").eq("id", body.product_id).single(),
   ]);
   if (customerError || productError || !customer || !product) return NextResponse.json({ ok: false, error: customerError?.message || productError?.message || "Datos no encontrados." }, { status: 404 });
 
@@ -44,6 +44,8 @@ export async function POST(request: Request) {
   const subtotal = baseSubtotal - discountAmount + installationAmount + deliveryAmount;
   const total = subtotal;
   const quoteNumber = `CT-${Date.now().toString().slice(-8)}`;
+  const customerAddress = [customer.address, customer.sector].filter(Boolean).join(", ");
+  const warrantyNote = "La garantía aplica según el producto, la pieza y el servicio realizado. La instalación y la reparación quedan sujetas a evaluación técnica y a las condiciones indicadas en la cotización.";
 
   const { data: quote, error: quoteError } = await supabase.from("quotes").insert({
     quote_number: quoteNumber,
@@ -55,6 +57,8 @@ export async function POST(request: Request) {
     total,
     customer_name_snapshot: customer.full_name,
     customer_phone_snapshot: customer.phone,
+    customer_address_snapshot: customerAddress || null,
+    warranty_note: warrantyNote,
     discount_amount: discountAmount,
     discount_pct: appliedDiscount,
     installation_included: Boolean(body.include_installation),
@@ -80,16 +84,20 @@ export async function POST(request: Request) {
   });
   if (itemError) return NextResponse.json({ ok: false, error: itemError.message }, { status: 500 });
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://techcomm-ai-one.vercel.app";
+  const previewUrl = `${appUrl}/cotizacion/${quote.public_token}`;
   const message = [
     `Cotización ${quoteNumber}`,
     `Cliente: ${customer.full_name}`,
+    customerAddress ? `Dirección: ${customerAddress}` : null,
     `${description}: RD$${unitPrice.toLocaleString("es-DO")}`,
     body.include_installation ? `Instalación: RD$${installationAmount.toLocaleString("es-DO")}` : "Sin instalación",
     deliveryFree ? "Envío: gratis con instalación" : body.include_delivery ? `Envío: RD$${deliveryAmount.toLocaleString("es-DO")}` : "Sin envío",
     appliedDiscount > 0 ? `Descuento aplicado: ${(appliedDiscount * 100).toFixed(0)}%` : null,
     `Total: RD$${total.toLocaleString("es-DO")}`,
     approvalRequired ? "El descuento solicitado requiere aprobación de un supervisor." : "Válida por 7 días.",
+    `Ver y responder: ${previewUrl}`,
   ].filter(Boolean).join("\n");
 
-  return NextResponse.json({ ok: true, quote, message, approval_required: approvalRequired, available });
+  return NextResponse.json({ ok: true, quote, message, preview_url: previewUrl, approval_required: approvalRequired, available });
 }
