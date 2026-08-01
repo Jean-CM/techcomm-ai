@@ -15,15 +15,63 @@ type Payload = {
   visit_fee_accepted?: boolean;
 };
 
+type MissingField =
+  | "customer_name"
+  | "customer_phone"
+  | "address"
+  | "equipment"
+  | "issue"
+  | "scheduled_at"
+  | "visit_fee_accepted";
+
 function normalizePhone(value?: string) {
   const digits = String(value ?? "").replace(/\D/g, "");
   return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+}
+
+function cleanText(value?: string) {
+  return String(value ?? "").trim();
+}
+
+function isPlaceholder(value: string) {
+  const normalized = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  return [
+    "no proporcionado",
+    "no proporcionada",
+    "no indicado",
+    "no indicada",
+    "no disponible",
+    "no registrado",
+    "no registrada",
+    "desconocido",
+    "desconocida",
+    "pendiente",
+    "por confirmar",
+  ].includes(normalized);
 }
 
 function orderNumber() {
   const stamp = Date.now().toString().slice(-6);
   const random = Math.floor(Math.random() * 900 + 100);
   return `OT-${stamp}${random}`;
+}
+
+function questionFor(field: MissingField) {
+  const questions: Record<MissingField, string> = {
+    customer_name: "¿A nombre de quién deseas registrar la visita?",
+    customer_phone: "¿Cuál es el número de teléfono de contacto?",
+    address: "¿En qué dirección o sector se encuentra el equipo?",
+    equipment: "¿Qué equipo necesita revisión?",
+    issue: "¿Qué falla presenta el equipo?",
+    scheduled_at: "¿Qué día y hora, entre 8:00 a. m. y 6:00 p. m., te convienen para la visita?",
+    visit_fee_accepted: "La visita técnica cuesta RD$500 y se acredita a la factura si realizas la reparación con Techcomm. ¿Deseas continuar?",
+  };
+  return questions[field];
 }
 
 export async function POST(request: Request) {
@@ -33,20 +81,44 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as Payload;
   const phone = normalizePhone(body.customer_phone);
-  const name = body.customer_name?.trim() || null;
-  const address = body.address?.trim() || "";
-  const equipment = body.equipment?.trim() || "Equipo por identificar";
-  const issue = body.issue?.trim() || "Falla por confirmar";
+  const name = cleanText(body.customer_name);
+  const address = cleanText(body.address);
+  const equipment = cleanText(body.equipment);
+  const issue = cleanText(body.issue);
   const source = body.source || "whatsapp";
 
-  if (!/^(809|829|849)\d{7}$/.test(phone)) {
-    return NextResponse.json({ ok: false, error: "El teléfono debe tener 10 dígitos y comenzar con 809, 829 o 849." }, { status: 400 });
+  const missingFields: MissingField[] = [];
+
+  if (!name || isPlaceholder(name)) missingFields.push("customer_name");
+  if (!/^(809|829|849)\d{7}$/.test(phone)) missingFields.push("customer_phone");
+  if (!address || isPlaceholder(address)) missingFields.push("address");
+  if (!equipment || isPlaceholder(equipment)) missingFields.push("equipment");
+  if (!issue || isPlaceholder(issue)) missingFields.push("issue");
+
+  let scheduledAt: Date | null = null;
+  if (!body.scheduled_at || isPlaceholder(cleanText(body.scheduled_at))) {
+    missingFields.push("scheduled_at");
+  } else {
+    const parsed = new Date(body.scheduled_at);
+    if (Number.isNaN(parsed.getTime())) {
+      missingFields.push("scheduled_at");
+    } else {
+      scheduledAt = parsed;
+    }
   }
-  if (!address) {
-    return NextResponse.json({ ok: false, error: "La dirección es requerida para crear la orden." }, { status: 400 });
-  }
-  if (body.visit_fee_accepted !== true) {
-    return NextResponse.json({ ok: false, error: "El cliente debe aceptar el costo de visita de RD$500 antes de crear la orden." }, { status: 400 });
+
+  if (body.visit_fee_accepted !== true) missingFields.push("visit_fee_accepted");
+
+  if (missingFields.length) {
+    const nextField = missingFields[0];
+    return NextResponse.json({
+      ok: false,
+      status: "needs_more_information",
+      missing_fields: missingFields,
+      next_field: nextField,
+      next_question: questionFor(nextField),
+      instruction: "No se creó ninguna orden. Haz solamente la pregunta indicada y vuelve a ejecutar la herramienta cuando tengas todos los datos reales. Nunca uses valores como 'No proporcionado'.",
+    });
   }
 
   const supabase = getSupabaseAdmin();
@@ -65,9 +137,9 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from("customers")
       .update({
-        full_name: name || customer.full_name,
+        full_name: name,
         address,
-        sector: body.sector?.trim() || customer.sector,
+        sector: cleanText(body.sector) || customer.sector,
         source,
         updated_at: new Date().toISOString(),
       })
@@ -79,7 +151,13 @@ export async function POST(request: Request) {
   } else {
     const { data, error } = await supabase
       .from("customers")
-      .insert({ full_name: name, phone, address, sector: body.sector?.trim() || null, source })
+      .insert({
+        full_name: name,
+        phone,
+        address,
+        sector: cleanText(body.sector) || null,
+        source,
+      })
       .select("id,full_name,phone,address,sector")
       .single();
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -113,30 +191,24 @@ export async function POST(request: Request) {
     return a.full_name.localeCompare(b.full_name);
   })[0] || null;
 
-  let appointment: { id: string; starts_at: string; technician_id: string | null } | null = null;
-  if (body.scheduled_at) {
-    const parsed = new Date(body.scheduled_at);
-    if (Number.isNaN(parsed.getTime())) {
-      return NextResponse.json({ ok: false, error: "La fecha y hora de la cita no son válidas." }, { status: 400 });
-    }
-    const { data, error } = await supabase
-      .from("appointments")
-      .insert({
-        customer_id: customer.id,
-        technician_id: technician?.id || null,
-        starts_at: parsed.toISOString(),
-        address,
-        status: "scheduled",
-        confirmation_status: "pending",
-        technician_confirmation_status: technician ? "confirmed" : "pending",
-        technician_confirmation_at: technician ? new Date().toISOString() : null,
-        requires_manual_assignment: !technician,
-        notes: `${equipment}: ${issue}`,
-      })
-      .select("id,starts_at,technician_id")
-      .single();
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    appointment = data;
+  const { data: appointment, error: appointmentError } = await supabase
+    .from("appointments")
+    .insert({
+      customer_id: customer.id,
+      technician_id: technician?.id || null,
+      starts_at: scheduledAt!.toISOString(),
+      address,
+      status: "scheduled",
+      confirmation_status: "pending",
+      technician_confirmation_status: technician ? "confirmed" : "pending",
+      technician_confirmation_at: technician ? new Date().toISOString() : null,
+      requires_manual_assignment: !technician,
+      notes: `${equipment}: ${issue}`,
+    })
+    .select("id,starts_at,technician_id")
+    .single();
+  if (appointmentError) {
+    return NextResponse.json({ ok: false, error: appointmentError.message }, { status: 500 });
   }
 
   const number = orderNumber();
@@ -145,13 +217,13 @@ export async function POST(request: Request) {
     .insert({
       order_number: number,
       customer_id: customer.id,
-      appointment_id: appointment?.id || null,
+      appointment_id: appointment.id,
       technician_id: technician?.id || null,
       equipment,
-      brand: body.brand?.trim() || null,
-      model: body.model?.trim() || null,
+      brand: cleanText(body.brand) || null,
+      model: cleanText(body.model) || null,
       issue,
-      status: technician ? "assigned" : "new",
+      status: "scheduled",
       priority: "normal",
       source,
       visit_fee: 500,
@@ -163,12 +235,14 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    status: "created",
     order: workOrder,
     customer,
     appointment,
     technician: technician
       ? { id: technician.id, name: technician.full_name, phone: technician.phone }
       : null,
+    technician_assigned: Boolean(technician),
     requires_manual_assignment: !technician,
     customer_message: technician
       ? `Orden ${number} creada correctamente. La visita tiene un costo de RD$500, acreditable a la factura si se realiza la reparación. Se asignó un técnico disponible.`
