@@ -1,72 +1,211 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin, requireToolSecret } from "@/lib/supabase-admin";
 
-type Payload = { query?: string; brand?: string; category?: string; model?: string };
+type Payload = {
+  query?: string;
+  brand?: string;
+  category?: string;
+  model?: string;
+};
 
-function words(value?: string) {
+type ProductRow = {
+  id: string;
+  sku?: string | null;
+  name?: string | null;
+  piece_name?: string | null;
+  description?: string | null;
+  item_type?: string | null;
+  category?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  sale_price?: number | string | null;
+  price?: number | string | null;
+  currency?: string | null;
+  stock?: number | string | null;
+  reserved_stock?: number | string | null;
+  installation_price?: number | string | null;
+  delivery_price?: number | string | null;
+  installation_includes_delivery?: boolean | null;
+  max_discount_pct?: number | string | null;
+  minimum_authorized_price?: number | string | null;
+};
+
+const GENERIC_WORDS = new Set([
+  "de",
+  "del",
+  "el",
+  "la",
+  "los",
+  "las",
+  "un",
+  "una",
+  "para",
+  "con",
+  "sin",
+  "que",
+  "quiero",
+  "busco",
+  "necesito",
+  "interesa",
+  "interesado",
+  "interesada",
+  "televisor",
+  "televisores",
+  "television",
+  "tv",
+  "smart",
+  "pulgada",
+  "pulgadas",
+  "equipo",
+  "producto",
+]);
+
+function normalize(value?: string | null) {
   return String(value ?? "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[″”"]/g, " pulgadas ")
     .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function words(value?: string | null) {
+  return normalize(value)
     .split(/\s+/)
-    .filter((word) => word.length > 1)
-    .slice(0, 8);
+    .filter((word) => word.length > 1 && !GENERIC_WORDS.has(word))
+    .slice(0, 12);
+}
+
+function availableUnits(item: ProductRow) {
+  return Math.max(0, Number(item.stock || 0) - Number(item.reserved_stock || 0));
+}
+
+function productText(item: ProductRow) {
+  return normalize(
+    [item.sku, item.name, item.piece_name, item.description, item.category, item.brand, item.model]
+      .filter(Boolean)
+      .join(" "),
+  );
+}
+
+function requestedTelevisionSize(value?: string) {
+  const normalized = normalize(value);
+  const explicit = normalized.match(/\b(\d{2,3})\s*(?:pulgada|pulgadas|pulg|inch|inches)\b/);
+  if (explicit) return Number(explicit[1]);
+
+  const televisionRequest = /\b(?:tv|televisor|television|smart tv)\b/.test(normalized);
+  if (!televisionRequest) return null;
+
+  const standalone = normalized.match(/\b(2[4-9]|[3-9]\d|1[01]\d)\b/);
+  return standalone ? Number(standalone[1]) : null;
+}
+
+function productMatchesSize(item: ProductRow, size: number) {
+  const text = productText(item);
+  return new RegExp(`\\b${size}(?:\\s*(?:pulgada|pulgadas|pulg))?\\b`).test(text);
+}
+
+function explicitBrandFromQuery(queryText: string, products: ProductRow[]) {
+  const normalizedQuery = normalize(queryText);
+  const brands = [...new Set(products.map((item) => item.brand?.trim()).filter((value): value is string => Boolean(value)))];
+  return brands.find((brand) => {
+    const normalizedBrand = normalize(brand);
+    return normalizedBrand && new RegExp(`(^|\\s)${normalizedBrand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=\\s|$)`).test(normalizedQuery);
+  }) ?? null;
 }
 
 export async function POST(request: Request) {
-  if (!requireToolSecret(request)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  const body = await request.json().catch(() => ({})) as Payload;
+  if (!requireToolSecret(request)) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as Payload;
   const supabase = getSupabaseAdmin();
 
-  let query = supabase
+  let databaseQuery = supabase
     .from("products")
-    .select("id,sku,name,piece_name,description,item_type,category,brand,model,sale_price,price,currency,stock,reserved_stock,installation_price,delivery_price,installation_includes_delivery,max_discount_pct,minimum_authorized_price")
+    .select(
+      "id,sku,name,piece_name,description,item_type,category,brand,model,sale_price,price,currency,stock,reserved_stock,installation_price,delivery_price,installation_includes_delivery,max_discount_pct,minimum_authorized_price",
+    )
     .eq("active", true)
-    .limit(100);
+    .limit(250);
 
-  if (body.brand) query = query.ilike("brand", `%${body.brand.trim()}%`);
-  if (body.category) query = query.ilike("category", `%${body.category.trim()}%`);
-  if (body.model) query = query.ilike("model", `%${body.model.trim()}%`);
+  if (body.brand?.trim()) databaseQuery = databaseQuery.ilike("brand", `%${body.brand.trim()}%`);
+  if (body.category?.trim()) databaseQuery = databaseQuery.ilike("category", `%${body.category.trim()}%`);
+  if (body.model?.trim()) databaseQuery = databaseQuery.ilike("model", `%${body.model.trim()}%`);
 
-  const { data, error } = await query;
+  const { data, error } = await databaseQuery;
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  const tokens = words(body.query);
-  const ranked = (data ?? [])
+  const products = (data ?? []) as ProductRow[];
+  const queryText = body.query?.trim() ?? "";
+  const requestedSize = requestedTelevisionSize(queryText);
+  const requestedBrand = body.brand?.trim() || explicitBrandFromQuery(queryText, products);
+  const requestedModel = body.model?.trim() || null;
+  const tokens = words(queryText).filter((token) => token !== String(requestedSize ?? ""));
+
+  const exactCandidates = products
+    .filter((item) => availableUnits(item) > 0)
+    .filter((item) => !requestedBrand || normalize(item.brand).includes(normalize(requestedBrand)))
+    .filter((item) => !requestedModel || normalize(item.model).includes(normalize(requestedModel)))
+    .filter((item) => requestedSize == null || productMatchesSize(item, requestedSize));
+
+  const ranked = exactCandidates
     .map((item) => {
-      const haystack = words([item.name, item.piece_name, item.description, item.category, item.brand, item.model].filter(Boolean).join(" "));
-      const score = tokens.reduce((total, token) => total + (haystack.some((value) => value.includes(token) || token.includes(value)) ? 1 : 0), 0);
-      return { item, score };
+      const text = productText(item);
+      const tokenScore = tokens.reduce((total, token) => total + (text.includes(token) ? 1 : 0), 0);
+      const brandScore = requestedBrand && normalize(item.brand).includes(normalize(requestedBrand)) ? 5 : 0;
+      const sizeScore = requestedSize != null && productMatchesSize(item, requestedSize) ? 5 : 0;
+      const modelScore = requestedModel && normalize(item.model).includes(normalize(requestedModel)) ? 8 : 0;
+      return { item, score: tokenScore + brandScore + sizeScore + modelScore };
     })
     .filter(({ score }) => !tokens.length || score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 6)
-    .map(({ item }) => ({
-      id: item.id,
-      sku: item.sku,
-      name: item.piece_name || item.name,
-      description: item.description,
-      item_type: item.item_type,
-      category: item.category,
-      brand: item.brand,
-      model: item.model,
-      price: Number(item.sale_price ?? item.price ?? 0),
-      currency: item.currency,
-      available: Math.max(0, Number(item.stock || 0) - Number(item.reserved_stock || 0)) > 0,
-      installation_price: Number(item.installation_price || 0),
-      delivery_price: Number(item.delivery_price || 0),
-      installation_includes_delivery: Boolean(item.installation_includes_delivery),
-      discount_available: Number(item.max_discount_pct || 0) > 0,
-      minimum_authorized_price: Number(item.minimum_authorized_price || 0),
-    }));
+    .map(({ item }) => {
+      const installationPrice = Number(item.installation_price || 0);
+      const deliveryPrice = Number(item.delivery_price || 0);
+      const installationAvailable = installationPrice > 0;
+
+      return {
+        id: item.id,
+        sku: item.sku,
+        name: item.piece_name || item.name,
+        description: item.description,
+        item_type: item.item_type,
+        category: item.category,
+        brand: item.brand,
+        model: item.model,
+        price: Number(item.sale_price ?? item.price ?? 0),
+        currency: item.currency,
+        available: true,
+        installation_available: installationAvailable,
+        installation_price: installationAvailable ? installationPrice : null,
+        delivery_price: deliveryPrice > 0 ? deliveryPrice : null,
+        installation_includes_delivery: installationAvailable && Boolean(item.installation_includes_delivery),
+        discount_available: Number(item.max_discount_pct || 0) > 0,
+        minimum_authorized_price: Number(item.minimum_authorized_price || 0),
+      };
+    });
+
+  const strictRequest = Boolean(requestedBrand || requestedModel || requestedSize != null);
 
   return NextResponse.json({
     ok: true,
     found: ranked.length > 0,
+    strict_match: strictRequest,
+    requested: {
+      brand: requestedBrand,
+      model: requestedModel,
+      size_inches: requestedSize,
+    },
     products: ranked,
     customer_message: ranked.length
-      ? "Hay opciones disponibles. Presenta marca, modelo, características, precio sin instalación y costo de instalación o envío. No menciones cantidades exactas ni límites internos de descuento."
-      : "No se encontró una coincidencia exacta. Pregunta por marca, tamaño, modelo o característica para refinar la búsqueda.",
+      ? "Presenta únicamente los productos devueltos en products. No menciones otras marcas, tamaños o modelos que no estén en esta respuesta. No reveles cantidades. Si installation_price es null, no digas que la instalación es gratis; indica que el costo debe validarse."
+      : strictRequest
+        ? "No hay una coincidencia exacta disponible para lo solicitado. No ofrezcas alternativas todavía. Pregunta si el cliente desea ver otras marcas, tamaños o modelos disponibles."
+        : "No se encontró una coincidencia disponible. Solicita una marca, tamaño, modelo o característica para refinar la búsqueda.",
   });
 }
