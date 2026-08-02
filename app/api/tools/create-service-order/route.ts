@@ -24,6 +24,10 @@ type MissingField =
   | "scheduled_at"
   | "visit_fee_accepted";
 
+const SERVICE_TIME_ZONE = "America/Santo_Domingo";
+const SERVICE_OPEN_MINUTES = 8 * 60;
+const SERVICE_CLOSE_MINUTES = 16 * 60;
+
 function normalizePhone(value?: string) {
   const digits = String(value ?? "").replace(/\D/g, "");
   return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
@@ -68,10 +72,34 @@ function questionFor(field: MissingField) {
     address: "¿En qué dirección o sector se encuentra el equipo?",
     equipment: "¿Qué equipo necesita revisión?",
     issue: "¿Qué falla presenta el equipo?",
-    scheduled_at: "¿Qué día y hora, entre 8:00 a. m. y 6:00 p. m., te convienen para la visita?",
+    scheduled_at: "Nuestro horario de servicio es de 8:00 a. m. a 4:00 p. m. ¿Qué día y hora dentro de ese horario te convienen para la visita?",
     visit_fee_accepted: "La visita técnica cuesta RD$500 y se acredita a la factura si realizas la reparación con Techcomm. ¿Deseas continuar?",
   };
   return questions[field];
+}
+
+function minutesInServiceTimeZone(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: SERVICE_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
+}
+
+function formatAppointment(date: Date) {
+  return new Intl.DateTimeFormat("es-DO", {
+    timeZone: SERVICE_TIME_ZONE,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 export async function POST(request: Request) {
@@ -117,7 +145,21 @@ export async function POST(request: Request) {
       missing_fields: missingFields,
       next_field: nextField,
       next_question: questionFor(nextField),
+      service_hours: "8:00 a. m. a 4:00 p. m.",
       instruction: "No se creó ninguna orden. Haz solamente la pregunta indicada y vuelve a ejecutar la herramienta cuando tengas todos los datos reales. Nunca uses valores como 'No proporcionado'.",
+    });
+  }
+
+  const appointmentMinutes = minutesInServiceTimeZone(scheduledAt!);
+  if (appointmentMinutes < SERVICE_OPEN_MINUTES || appointmentMinutes > SERVICE_CLOSE_MINUTES) {
+    return NextResponse.json({
+      ok: false,
+      status: "needs_more_information",
+      missing_fields: ["scheduled_at"],
+      next_field: "scheduled_at",
+      next_question: "Nuestro horario de servicio es de 8:00 a. m. a 4:00 p. m. ¿Qué otra hora dentro de ese horario prefieres?",
+      service_hours: "8:00 a. m. a 4:00 p. m.",
+      instruction: "No se creó ninguna orden. Solicita otra hora y vuelve a ejecutar la herramienta con la nueva fecha en formato ISO 8601.",
     });
   }
 
@@ -233,19 +275,21 @@ export async function POST(request: Request) {
     .single();
   if (orderError) return NextResponse.json({ ok: false, error: orderError.message }, { status: 500 });
 
+  const appointmentLabel = formatAppointment(scheduledAt!);
   return NextResponse.json({
     ok: true,
     status: "created",
     order: workOrder,
     customer,
     appointment,
+    service_hours: "8:00 a. m. a 4:00 p. m.",
     technician: technician
       ? { id: technician.id, name: technician.full_name, phone: technician.phone }
       : null,
     technician_assigned: Boolean(technician),
     requires_manual_assignment: !technician,
     customer_message: technician
-      ? `Orden ${number} creada correctamente. La visita tiene un costo de RD$500, acreditable a la factura si se realiza la reparación. Se asignó un técnico disponible.`
-      : `Orden ${number} creada correctamente. La visita tiene un costo de RD$500, acreditable a la factura si se realiza la reparación. La asignación del técnico quedó pendiente en el CRM.`,
+      ? `Listo, ${name}. Tu visita quedó programada para ${appointmentLabel}. La orden es ${number}. La visita cuesta RD$500 y ese monto se acredita a la factura si realizas la reparación con Techcomm. Ya se asignó un técnico disponible.`
+      : `Listo, ${name}. Tu visita quedó programada para ${appointmentLabel}. La orden es ${number}. La visita cuesta RD$500 y ese monto se acredita a la factura si realizas la reparación con Techcomm. La asignación del técnico quedó pendiente en el CRM.`,
   });
 }
