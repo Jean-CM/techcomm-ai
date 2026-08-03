@@ -30,6 +30,9 @@ type ProductRow = {
   minimum_authorized_price?: number | string | null;
 };
 
+const LARGE_EQUIPMENT_INSTALLATION_PRICE = 2000;
+const SMALL_ITEM_DELIVERY_PRICE = 350;
+
 const GENERIC_WORDS = new Set([
   "de",
   "del",
@@ -88,6 +91,48 @@ function productText(item: ProductRow) {
       .filter(Boolean)
       .join(" "),
   );
+}
+
+function isLargeInstallableEquipment(item: ProductRow) {
+  const text = productText(item);
+  return [
+    "televisor",
+    "television",
+    "smart tv",
+    "lavadora",
+    "secadora",
+    "estufa",
+    "cocina",
+    "aire acondicionado",
+    "nevera",
+    "refrigerador",
+    "freezer",
+    "congelador",
+    "horno",
+    "lavaplatos",
+  ].some((term) => text.includes(term));
+}
+
+function isSmallDeliveryItem(item: ProductRow) {
+  const text = productText(item);
+  const type = normalize(item.item_type);
+  if (type === "accessory") return true;
+  return [
+    "movil",
+    "celular",
+    "telefono",
+    "smartphone",
+    "iphone",
+    "cover",
+    "funda",
+    "protector",
+    "cargador",
+    "cable",
+    "audifono",
+    "bateria",
+    "tableta",
+    "tablet",
+  ].some((term) => text.includes(term));
 }
 
 function requestedTelevisionSize(value?: string) {
@@ -165,9 +210,26 @@ export async function POST(request: Request) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 6)
     .map(({ item }) => {
-      const installationPrice = Number(item.installation_price || 0);
-      const deliveryPrice = Number(item.delivery_price || 0);
-      const installationAvailable = installationPrice > 0;
+      const configuredInstallationPrice = Number(item.installation_price || 0);
+      const configuredDeliveryPrice = Number(item.delivery_price || 0);
+      const largeInstallableEquipment = isLargeInstallableEquipment(item);
+      const smallDeliveryItem = isSmallDeliveryItem(item);
+
+      const installationPrice = largeInstallableEquipment
+        ? configuredInstallationPrice > 0
+          ? configuredInstallationPrice
+          : LARGE_EQUIPMENT_INSTALLATION_PRICE
+        : configuredInstallationPrice > 0
+          ? configuredInstallationPrice
+          : null;
+
+      const deliveryPrice = smallDeliveryItem
+        ? configuredDeliveryPrice > 0
+          ? configuredDeliveryPrice
+          : SMALL_ITEM_DELIVERY_PRICE
+        : configuredDeliveryPrice > 0
+          ? configuredDeliveryPrice
+          : null;
 
       return {
         id: item.id,
@@ -181,10 +243,17 @@ export async function POST(request: Request) {
         price: Number(item.sale_price ?? item.price ?? 0),
         currency: item.currency,
         available: true,
-        installation_available: installationAvailable,
-        installation_price: installationAvailable ? installationPrice : null,
-        delivery_price: deliveryPrice > 0 ? deliveryPrice : null,
-        installation_includes_delivery: installationAvailable && Boolean(item.installation_includes_delivery),
+        installation_available: installationPrice !== null,
+        installation_price: installationPrice,
+        delivery_price: deliveryPrice,
+        installation_includes_delivery: largeInstallableEquipment
+          ? true
+          : installationPrice !== null && Boolean(item.installation_includes_delivery),
+        service_pricing_rule: largeInstallableEquipment
+          ? "large_equipment_installation"
+          : smallDeliveryItem
+            ? "small_item_delivery"
+            : "catalog_configuration",
         discount_available: Number(item.max_discount_pct || 0) > 0,
         minimum_authorized_price: Number(item.minimum_authorized_price || 0),
       };
@@ -201,9 +270,16 @@ export async function POST(request: Request) {
       model: requestedModel,
       size_inches: requestedSize,
     },
+    service_policy: {
+      repair_visit_price: 500,
+      repair_visit_creditable: true,
+      large_equipment_installation_price: LARGE_EQUIPMENT_INSTALLATION_PRICE,
+      large_equipment_installation_includes_delivery: true,
+      small_item_delivery_price: SMALL_ITEM_DELIVERY_PRICE,
+    },
     products: ranked,
     customer_message: ranked.length
-      ? "Presenta únicamente los productos devueltos en products. No menciones otras marcas, tamaños o modelos que no estén en esta respuesta. No reveles cantidades. Si installation_price es null, no digas que la instalación es gratis; indica que el costo debe validarse."
+      ? "Presenta únicamente los productos devueltos en products. No menciones otras marcas, tamaños o modelos que no estén en esta respuesta. No reveles cantidades. Para televisores y electrodomésticos usa installation_price; la instalación incluye el envío. Para móviles y accesorios usa delivery_price cuando el cliente solicite entrega. No confundas esos servicios con la visita diagnóstica de RD$500 para reparaciones."
       : strictRequest
         ? "No hay una coincidencia exacta disponible para lo solicitado. No ofrezcas alternativas todavía. Pregunta si el cliente desea ver otras marcas, tamaños o modelos disponibles."
         : "No se encontró una coincidencia disponible. Solicita una marca, tamaño, modelo o característica para refinar la búsqueda.",
