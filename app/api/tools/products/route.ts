@@ -161,6 +161,14 @@ function explicitBrandFromQuery(queryText: string, products: ProductRow[]) {
   }) ?? null;
 }
 
+function presentationMode(requestedBrand: string | null, requestedModel: string | null, requestedSize: number | null) {
+  if (requestedModel) return "exact_model";
+  if (requestedBrand && requestedSize != null) return "brand_and_size";
+  if (requestedBrand) return "brand_only";
+  if (requestedSize != null) return "size_only";
+  return "general_category";
+}
+
 export async function POST(request: Request) {
   if (!requireToolSecret(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -260,11 +268,21 @@ export async function POST(request: Request) {
     });
 
   const strictRequest = Boolean(requestedBrand || requestedModel || requestedSize != null);
+  const mode = presentationMode(requestedBrand, requestedModel, requestedSize);
+
+  const presentationInstructions: Record<string, string> = {
+    general_category: "Presenta hasta tres opciones disponibles. No menciones instalación ni envío salvo que el cliente lo pregunte.",
+    size_only: "Presenta todas las opciones disponibles de ese tamaño, con un máximo de tres. Para cada una indica marca, tamaño, característica principal y precio. No menciones instalación ni envío salvo que el cliente lo pregunte.",
+    brand_only: "Presenta únicamente opciones de la marca solicitada. No menciones otras marcas ni instalación o envío salvo que el cliente lo solicite.",
+    brand_and_size: "Presenta únicamente opciones que coincidan con esa marca y tamaño. No sugieras otras marcas o tamaños. No menciones instalación ni envío salvo que el cliente lo solicite.",
+    exact_model: "Responde únicamente sobre el modelo solicitado. No sugieras otras opciones. No menciones instalación ni envío salvo que el cliente lo solicite.",
+  };
 
   return NextResponse.json({
     ok: true,
     found: ranked.length > 0,
     strict_match: strictRequest,
+    presentation_mode: mode,
     requested: {
       brand: requestedBrand,
       model: requestedModel,
@@ -279,7 +297,7 @@ export async function POST(request: Request) {
     },
     products: ranked,
     customer_message: ranked.length
-      ? "Presenta únicamente los productos devueltos en products. No menciones otras marcas, tamaños o modelos que no estén en esta respuesta. No reveles cantidades. Para televisores y electrodomésticos usa installation_price; la instalación incluye el envío. Para móviles y accesorios usa delivery_price cuando el cliente solicite entrega. No confundas esos servicios con la visita diagnóstica de RD$500 para reparaciones."
+      ? `${presentationInstructions[mode]} Presenta únicamente los productos devueltos en products. No reveles cantidades exactas ni información interna.`
       : strictRequest
         ? "No hay una coincidencia exacta disponible para lo solicitado. No ofrezcas alternativas todavía. Pregunta si el cliente desea ver otras marcas, tamaños o modelos disponibles."
         : "No se encontró una coincidencia disponible. Solicita una marca, tamaño, modelo o característica para refinar la búsqueda.",
