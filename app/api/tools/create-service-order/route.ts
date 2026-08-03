@@ -37,12 +37,48 @@ function cleanText(value?: string) {
   return String(value ?? "").trim();
 }
 
-function isPlaceholder(value: string) {
-  const normalized = value
+function normalizeText(value?: string) {
+  return cleanText(value)
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .trim();
+    .replace(/\s+/g, " ");
+}
+
+function isCommercialInstallationRequest(issue: string) {
+  const normalized = normalizeText(issue);
+  const commercialSignals = [
+    "instalacion de producto",
+    "instalar producto",
+    "instalar equipo nuevo",
+    "instalacion equipo nuevo",
+    "compra con instalacion",
+    "entrega con instalacion",
+    "venta con instalacion",
+    "cotizacion",
+    "factura de compra",
+    "envio a domicilio",
+  ];
+  const repairSignals = [
+    "no enciende",
+    "no prende",
+    "no funciona",
+    "no seca",
+    "no enfria",
+    "no da imagen",
+    "se apaga",
+    "falla",
+    "averia",
+    "reparacion",
+    "diagnostico",
+  ];
+
+  return commercialSignals.some((signal) => normalized.includes(signal))
+    && !repairSignals.some((signal) => normalized.includes(signal));
+}
+
+function isPlaceholder(value: string) {
+  const normalized = normalizeText(value);
 
   return [
     "no proporcionado",
@@ -114,6 +150,17 @@ export async function POST(request: Request) {
   const equipment = cleanText(body.equipment);
   const issue = cleanText(body.issue);
   const source = body.source || "whatsapp";
+
+  if (issue && isCommercialInstallationRequest(issue)) {
+    return NextResponse.json({
+      ok: false,
+      status: "wrong_flow",
+      flow: "product_sale_or_installation",
+      error: "Esta herramienta es únicamente para averías y visitas diagnósticas.",
+      next_question: "¿Deseas que registremos tus datos para preparar la compra o una cotización formal?",
+      instruction: "No crees una orden de reparación ni asignes un técnico mediante esta herramienta. Continúa el flujo comercial y no menciones el costo de visita de RD$500.",
+    }, { status: 409 });
+  }
 
   const missingFields: MissingField[] = [];
 
