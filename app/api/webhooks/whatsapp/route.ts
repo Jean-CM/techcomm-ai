@@ -35,11 +35,12 @@ export async function POST(request: Request) {
   form.forEach((value, key) => { params[key] = String(value); });
 
   const signature = request.headers.get("x-twilio-signature");
-  const fullUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`
-    : request.url;
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+  const fullUrl = host ? `${proto}://${host}/api/webhooks/whatsapp` : request.url;
 
   if (!verifyTwilioSignature(fullUrl, params, signature)) {
+    console.error("Twilio signature mismatch", { fullUrl, hasSignature: Boolean(signature), hasToken: Boolean(process.env.TWILIO_AUTH_TOKEN) });
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
