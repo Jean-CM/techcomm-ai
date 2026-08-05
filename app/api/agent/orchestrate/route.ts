@@ -173,7 +173,8 @@ export async function POST(request: Request) {
         model: MODEL,
         messages,
         tools,
-        tool_choice: "auto"
+        tool_choice: "auto",
+        reasoning_effort: "none" as OpenAI.Chat.Completions.ChatCompletionCreateParams["reasoning_effort"]
       });
 
       totalInputTokens += completion.usage?.prompt_tokens ?? 0;
