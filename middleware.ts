@@ -22,12 +22,16 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const isProtected = request.nextUrl.pathname.startsWith("/dashboard");
   const isLogin = request.nextUrl.pathname.startsWith("/login");
+  const isCrmApi = request.nextUrl.pathname.startsWith("/api/crm");
 
+  if (isCrmApi && !user) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
   if (isProtected && !user) return NextResponse.redirect(new URL("/login", request.url));
   if (isLogin && user) return NextResponse.redirect(new URL("/dashboard", request.url));
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"]
+  matcher: ["/dashboard/:path*", "/login", "/api/crm/:path*"]
 };
