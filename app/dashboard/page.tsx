@@ -29,6 +29,7 @@ export default async function DashboardPage() {
           <p className="muted" style={{ margin: 0 }}>{user.email}</p>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <Link className="button" href="/admin">Super Admin</Link>
           <Link className="button" href="/integrations">Integraciones</Link>
           <form action={signOut}><button className="button" type="submit">Cerrar sesión</button></form>
         </div>

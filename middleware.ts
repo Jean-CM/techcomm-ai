@@ -20,7 +20,9 @@ export async function middleware(request: NextRequest) {
   });
 
   const { data: { user } } = await supabase.auth.getUser();
-  const isProtected = request.nextUrl.pathname.startsWith("/dashboard");
+  const isProtected = request.nextUrl.pathname.startsWith("/dashboard")
+    || request.nextUrl.pathname.startsWith("/crm")
+    || request.nextUrl.pathname.startsWith("/admin");
   const isLogin = request.nextUrl.pathname.startsWith("/login");
   const isCrmApi = request.nextUrl.pathname.startsWith("/api/crm");
 
@@ -33,5 +35,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/api/crm/:path*"]
+  matcher: ["/dashboard/:path*", "/crm/:path*", "/admin/:path*", "/login", "/api/crm/:path*"]
 };
