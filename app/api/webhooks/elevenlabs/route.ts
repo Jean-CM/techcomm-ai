@@ -2,6 +2,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+// Voice cost constants — update if your ElevenLabs plan or Twilio rates change.
+const ELEVENLABS_COST_PER_MINUTE = 0.10; // Creator plan published rate
+const TWILIO_COST_PER_MINUTE_LOCAL = 0.1155; // Dominican Republic, landline
+const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
+
 type JsonObject = Record<string, unknown>;
 type ElevenLabsWebhookEvent = { type?: string; event_timestamp?: number; data?: JsonObject };
 
@@ -277,6 +282,25 @@ export async function POST(request: Request) {
             ? { status: "rescheduled", confirmation_status: "reschedule_requested" }
             : null;
       if (mapped) await supabase.from("appointments").update(mapped).eq("id", appointmentId);
+    }
+
+    // Log the real voice cost for this call so it shows up in ai_agent_runs
+    // alongside the text-channel runs from the OpenAI orchestrator.
+    const durationSeconds = Number(
+      metadata.call_duration_secs ?? metadata.duration_secs ?? data.call_duration_secs ?? 0
+    );
+    if (durationSeconds > 0) {
+      const durationMinutes = durationSeconds / 60;
+      await supabase.from("ai_agent_runs").insert({
+        organization_id: DEFAULT_ORG_ID,
+        conversation_id: conversationId ?? null,
+        channel: "voice",
+        model: asString(data.agent_id) ?? "elevenlabs-conversational-ai",
+        status: callStatus === "failed" ? "error" : "success",
+        tts_cost_usd: Number((durationMinutes * ELEVENLABS_COST_PER_MINUTE).toFixed(6)),
+        telephony_cost_usd: Number((durationMinutes * TWILIO_COST_PER_MINUTE_LOCAL).toFixed(6)),
+        latency_ms: Math.round(durationSeconds * 1000)
+      });
     }
   }
 
