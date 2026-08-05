@@ -125,6 +125,7 @@ export async function POST(request: Request) {
     const conversationExternalId = asString(data.conversation_id);
     const transcript = Array.isArray(data.transcript) ? (data.transcript as TranscriptItem[]) : [];
     const channel = mapChannel(metadata.channel, metadata.source, data.channel, data.communication_channel);
+    let conversationId: string | undefined;
 
     const customerPhone = normalizePhone(
       firstString(
@@ -215,7 +216,7 @@ export async function POST(request: Request) {
         .limit(1)
         .maybeSingle();
 
-      let conversationId = existingConversation?.id as string | undefined;
+      conversationId = existingConversation?.id as string | undefined;
       const startedAt = event.event_timestamp
         ? new Date(event.event_timestamp * 1000).toISOString()
         : new Date().toISOString();
