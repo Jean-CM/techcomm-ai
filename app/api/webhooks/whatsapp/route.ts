@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import twilio from "twilio";
 
 // Twilio sends WhatsApp webhooks as application/x-www-form-urlencoded.
 // We take the inbound message, run it through our own orchestrator
@@ -8,12 +8,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 function verifyTwilioSignature(url: string, params: Record<string, string>, signature: string | null) {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken || !signature) return false; // fail-closed
-  const sortedKeys = Object.keys(params).sort();
-  const data = sortedKeys.reduce((acc, key) => acc + key + params[key], url);
-  const expected = createHmac("sha1", authToken).update(Buffer.from(data, "utf-8")).digest("base64");
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signature);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return twilio.validateRequest(authToken, signature, url, params);
 }
 
 function escapeXml(text: string) {
