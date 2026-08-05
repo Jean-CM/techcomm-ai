@@ -15,7 +15,7 @@ export function getSupabaseAdmin() {
 
 export function requireToolSecret(request: Request) {
   const configured = process.env.TECHCOMM_TOOL_SECRET;
-  if (!configured) return true;
+  if (!configured) return false; // fail-closed: no secret configured means no access, not open access
   const header = request.headers.get("x-techcomm-tool-secret");
   return header === configured;
 }
