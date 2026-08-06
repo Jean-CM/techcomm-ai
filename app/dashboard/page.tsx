@@ -30,6 +30,7 @@ export default async function DashboardPage() {
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <Link className="button" href="/admin">Super Admin</Link>
+          <Link className="button" href="/crm">CRM</Link>
           <Link className="button" href="/integrations">Integraciones</Link>
           <form action={signOut}><button className="button" type="submit">Cerrar sesión</button></form>
         </div>
