@@ -61,6 +61,14 @@ const GENERIC_WORDS = new Set([
   "pulgadas",
   "equipo",
   "producto",
+  "nuevo",
+  "nueva",
+  "nuevos",
+  "nuevas",
+  "bueno",
+  "buena",
+  "comprar",
+  "compra",
 ]);
 
 function normalize(value?: string | null) {

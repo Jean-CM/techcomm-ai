@@ -13,6 +13,7 @@ type Payload = {
   scheduled_at?: string;
   source?: "whatsapp" | "phone" | "web" | "crm";
   visit_fee_accepted?: boolean;
+  customer_confirmed?: boolean;
 };
 
 type MissingField =
@@ -22,7 +23,8 @@ type MissingField =
   | "equipment"
   | "issue"
   | "scheduled_at"
-  | "visit_fee_accepted";
+  | "visit_fee_accepted"
+  | "customer_confirmed";
 
 const SERVICE_TIME_ZONE = "America/Santo_Domingo";
 const SERVICE_OPEN_MINUTES = 8 * 60;
@@ -117,6 +119,7 @@ function questionFor(field: MissingField) {
     issue: "¿Qué falla presenta el equipo?",
     scheduled_at: "Nuestro horario de servicio es de 8:00 a. m. a 4:00 p. m. ¿Qué día y hora dentro de ese horario te convienen para la visita?",
     visit_fee_accepted: "La visita técnica cuesta RD$500 y se acredita a la factura si realizas la reparación con Techcomm. ¿Deseas continuar?",
+    customer_confirmed: "¿Confirmas los datos de tu visita?",
   };
   return questions[field];
 }
@@ -227,6 +230,16 @@ export async function POST(request: Request) {
       next_question: "Nuestro horario de servicio es de 8:00 a. m. a 4:00 p. m. ¿Qué otra hora dentro de ese horario prefieres?",
       service_hours: "8:00 a. m. a 4:00 p. m.",
       instruction: "No se creó ninguna orden. Solicita otra hora y vuelve a ejecutar la herramienta con la nueva fecha en formato ISO 8601.",
+    });
+  }
+
+  if (body.customer_confirmed !== true) {
+    return NextResponse.json({
+      ok: false,
+      status: "needs_confirmation",
+      next_field: "customer_confirmed",
+      next_question: `Tengo registrado un ${equipment} que ${issue}, en ${address}, para ${formatAppointment(scheduledAt!)}. La visita cuesta RD$500 y se acredita a la reparación si la haces con Techcomm. ¿Confirmas estos datos?`,
+      instruction: "No se creó ninguna orden todavía. Lee EXACTAMENTE la pregunta de next_question al cliente, palabra por palabra, y espera su respuesta afirmativa. Solo cuando el cliente confirme, vuelve a ejecutar esta herramienta con customer_confirmed=true y el resto de los mismos datos. Si el cliente corrige algo, actualiza ese dato y vuelve a preguntar antes de continuar.",
     });
   }
 
