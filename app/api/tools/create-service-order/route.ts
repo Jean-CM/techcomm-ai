@@ -121,6 +121,19 @@ function questionFor(field: MissingField) {
   return questions[field];
 }
 
+function normalizeScheduledAt(value: string) {
+  const trimmed = value.trim();
+  // If there's no timezone designator (no trailing Z and no +/-HH:MM offset),
+  // the model forgot the offset. Assume Santo Domingo local time (-04:00)
+  // instead of letting JS silently treat it as UTC, which was shifting valid
+  // appointments outside business hours and causing repeated rejection loops.
+  const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(trimmed);
+  if (!hasTimezone && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+    return `${trimmed}-04:00`;
+  }
+  return trimmed;
+}
+
 function minutesInServiceTimeZone(date: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: SERVICE_TIME_ZONE,
@@ -181,7 +194,7 @@ export async function POST(request: Request) {
   if (!body.scheduled_at || isPlaceholder(cleanText(body.scheduled_at))) {
     missingFields.push("scheduled_at");
   } else {
-    const parsed = new Date(body.scheduled_at);
+    const parsed = new Date(normalizeScheduledAt(body.scheduled_at));
     if (Number.isNaN(parsed.getTime())) {
       missingFields.push("scheduled_at");
     } else {
