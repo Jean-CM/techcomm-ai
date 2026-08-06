@@ -26,7 +26,7 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
-  const [{ data: runs }, { data: memberships }] = await Promise.all([
+  const [{ data: runs }, { data: memberships }, { data: flaggedCalls }] = await Promise.all([
     admin
       .from("ai_agent_runs")
       .select("channel,status,input_tokens,output_tokens,llm_cost_usd,tts_cost_usd,telephony_cost_usd,total_cost_usd,created_at")
@@ -35,7 +35,8 @@ export default async function AdminPage() {
     admin
       .from("organization_memberships")
       .select("user_id,role,status,created_at")
-      .eq("organization_id", DEFAULT_ORG_ID)
+      .eq("organization_id", DEFAULT_ORG_ID),
+    admin.rpc("get_high_friction_calls")
   ]);
 
   const allRuns = runs ?? [];
@@ -114,6 +115,37 @@ export default async function AdminPage() {
               <td>${sum(voiceRuns, "total_cost_usd").toFixed(4)}</td>
               <td>${voiceRuns.length ? (sum(voiceRuns, "total_cost_usd") / voiceRuns.length).toFixed(4) : "0.0000"}</td>
             </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card" style={{ marginBottom: 24 }}>
+        <h2>Llamadas para revisar</h2>
+        <p className="muted">Detectadas automáticamente por el puntaje de frustración de ElevenLabs — sin necesidad de escuchar cada audio.</p>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ textAlign: "left" }}>
+              <th>Fecha</th>
+              <th>Teléfono</th>
+              <th>Frustración máx.</th>
+              <th>Resumen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(flaggedCalls ?? [])
+              .filter((c: { max_frustration: number | null }) => (c.max_frustration ?? 0) >= 0.3)
+              .sort((a: { max_frustration: number }, b: { max_frustration: number }) => b.max_frustration - a.max_frustration)
+              .map((c: { id: string; customer_phone: string; summary: string; max_frustration: number; created_at: string }) => (
+                <tr key={c.id}>
+                  <td>{new Date(c.created_at).toLocaleString("es-DO")}</td>
+                  <td>{c.customer_phone}</td>
+                  <td style={{ color: c.max_frustration >= 0.5 ? "crimson" : "darkorange" }}>{c.max_frustration.toFixed(2)}</td>
+                  <td>{c.summary}</td>
+                </tr>
+              ))}
+            {(flaggedCalls ?? []).filter((c: { max_frustration: number | null }) => (c.max_frustration ?? 0) >= 0.3).length === 0 && (
+              <tr><td colSpan={4} className="muted">Ninguna llamada reciente muestra fricción alta.</td></tr>
+            )}
           </tbody>
         </table>
       </section>
