@@ -49,7 +49,7 @@ function statusLabel(value?:string|null){ return value?STATUS_LABELS[value]||val
 function localDate(value?:string|null){ return value?new Date(value).toLocaleString("es-DO",{dateStyle:"medium",timeStyle:"short"}):"Sin fecha"; }
 function toLocalInput(value?:string|null){ if(!value)return ""; const date=new Date(value); const offset=date.getTimezoneOffset(); return new Date(date.getTime()-offset*60000).toISOString().slice(0,16); }
 function channel(event:CallEvent){ const raw=String(event.metadata?.channel??event.metadata?.source??"").toLowerCase(); return raw.includes("whatsapp")?"WhatsApp":"Llamada"; }
-function badgeClass(value?:string|null){ if(["completed","confirmed","accepted","available","sent","done","approved"].includes(String(value)))return `${styles.badge} ${styles.badgeOk}`; if(["cancelled","failed","unavailable"].includes(String(value)))return `${styles.badge} ${styles.badgeBad}`; if(["pending","busy","on_hold","pending_customer","rescheduled"].includes(String(value)))return `${styles.badge} ${styles.badgeWarn}`; return styles.badge; }
+function badgeClass(value?:string|null){ if(["completed","confirmed","accepted","available","sent","done","approved"].includes(String(value)))return `${styles.badge} ${styles.badgeOk}`; if(["cancelled","failed","unavailable"].includes(String(value)))return `${styles.badge} ${styles.badgeBad}`; if(["pending","busy","on_hold","pending_customer","rescheduled","scheduled","assigned","new","in_progress","draft"].includes(String(value)))return `${styles.badge} ${styles.badgeWarn}`; return styles.badge; }
 
 export default function OperationsClient(){
   const [data,setData]=useState<Overview>(EMPTY);
