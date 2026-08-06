@@ -92,6 +92,13 @@ function isPlaceholder(value: string) {
     "desconocida",
     "pendiente",
     "por confirmar",
+    "cliente",
+    "customer",
+    "n/a",
+    "na",
+    "sin nombre",
+    "test",
+    "prueba",
   ].includes(normalized);
 }
 
