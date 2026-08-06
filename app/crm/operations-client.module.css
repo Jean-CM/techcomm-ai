@@ -6,18 +6,18 @@
 .brand h2 span{display:block;color:var(--muted);font-weight:500}
 .brand p{margin:6px 0 0 18px;color:var(--muted);font-size:.85rem;font-family:var(--font-mono)}
 .roleCard{border:1px solid var(--border);background:var(--panel);border-radius:10px;padding:12px}
-.roleCard small{color:var(--muted);display:block;margin-bottom:8px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.05em;font-size:.78rem}
+.roleCard small{color:var(--muted);display:block;margin-bottom:8px;font-family:var(--font-body);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:.8rem}
 .roleCard select{width:100%;background:#0f1318;color:var(--text);border:1px solid var(--border);border-radius:7px;padding:11px;font-size:.95rem}
 .nav{display:grid;gap:3px}
 .nav button{background:transparent;color:var(--muted);border:0;border-left:2px solid transparent;text-align:left;padding:12px 13px;border-radius:0 7px 7px 0;font-size:1rem;cursor:pointer;transition:background .12s ease,color .12s ease}
 .nav button:hover{background:var(--panel);color:var(--text)}
 .nav .active{background:var(--panel);color:var(--text);border-left-color:var(--accent);font-weight:600}
-.sidebarFoot{margin-top:auto;color:var(--muted);font-size:.82rem;line-height:2.1;font-family:var(--font-mono)}
+.sidebarFoot{margin-top:auto;color:var(--muted);font-size:.85rem;line-height:2.1;font-family:var(--font-body)}
 .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--good);margin-right:8px;box-shadow:0 0 8px rgba(76,195,138,.7)}
 
 .content{padding:30px;min-width:0}
 .header{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:14px}
-.header small,.eyebrow{color:var(--accent-2);font-weight:600;letter-spacing:.07em;font-size:.78rem;font-family:var(--font-mono);text-transform:uppercase}
+.header small,.eyebrow{color:var(--accent-2);font-weight:700;letter-spacing:.06em;font-size:.8rem;font-family:var(--font-body);text-transform:uppercase}
 .header h1{margin:6px 0 0;font-size:2.1rem}
 .headerActions{display:flex;gap:8px;align-items:center}
 
@@ -37,7 +37,7 @@
 .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
 .metric,.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.18)}
 .metric{padding:20px;border-top:2px solid var(--accent-2)}
-.metric small{color:var(--muted);font-family:var(--font-mono);font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
+.metric small{color:var(--muted);font-family:var(--font-body);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.03em}
 .metric strong{font-family:var(--font-mono);font-size:2.2rem;display:block;color:var(--text);margin:8px 0 4px}
 .metric span{font-size:.85rem;color:var(--muted)}
 
@@ -57,7 +57,7 @@
 .tableWrap{overflow:auto;border:1px solid var(--border);border-radius:9px}
 .table{min-width:1020px}
 .row,.headRow{display:grid;align-items:center;gap:12px;padding:15px 18px}
-.headRow{background:#181c22;color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-mono)}
+.headRow{background:#181c22;color:var(--muted);font-weight:700;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;font-family:var(--font-body)}
 .row{border-top:1px solid var(--border);font-size:1rem;line-height:1.4;position:relative}
 .row:hover{background:#1d222a}
 .row p{margin:4px 0;color:var(--muted);font-size:.88rem}
@@ -75,7 +75,7 @@
 .colsProduct{grid-template-columns:60px 1.8fr 140px 150px 160px 105px}
 .colsQuote{grid-template-columns:130px 1.2fr 140px 130px 150px}
 
-.badge{display:inline-flex;align-items:center;justify-content:center;padding:6px 12px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:.8rem;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;justify-content:center;padding:6px 12px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:.78rem;font-family:var(--font-body);font-weight:700;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
 .badgeOk{border-color:rgba(76,195,138,.5);color:var(--good)}
 .badgeWarn{border-color:rgba(227,179,65,.5);color:var(--accent-2)}
 .badgeBad{border-color:rgba(232,100,106,.5);color:var(--bad)}
@@ -99,17 +99,17 @@
 
 .detailGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:14px}
 .detailBox{background:#0f1318;border:1px solid var(--border);border-radius:8px;padding:11px}
-.detailBox small{color:var(--muted);font-family:var(--font-mono);font-size:.78rem;text-transform:uppercase}
+.detailBox small{color:var(--muted);font-family:var(--font-body);font-weight:600;font-size:.8rem;text-transform:uppercase}
 .detailBox strong{display:block;margin-top:5px}
 
 .transcript{display:grid;gap:9px}
 .bubble{border:1px solid var(--border);background:#191d24;border-radius:10px;padding:11px}
 .bubbleUser{background:#23291f;border-color:rgba(76,195,138,.35)}
-.bubble small{display:block;color:var(--muted);margin-bottom:5px;font-family:var(--font-mono);font-size:.7rem}
+.bubble small{display:block;color:var(--muted);margin-bottom:5px;font-family:var(--font-body);font-weight:600;font-size:.78rem}
 
 .timeline{display:grid;gap:9px}
 .timelineItem{display:grid;grid-template-columns:115px 1fr;gap:10px;border-left:2px solid var(--accent);padding:8px 0 8px 13px}
-.timelineItem time{color:var(--muted);font-size:.73rem;font-family:var(--font-mono)}
+.timelineItem time{color:var(--muted);font-size:.8rem;font-family:var(--font-body);font-weight:600}
 .timelineItem p{margin:4px 0;color:var(--muted)}
 
 .compactAgenda .row,.compactAgenda .headRow{padding-top:9px;padding-bottom:9px}
