@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import InviteUserForm from "./invite-user-form";
+import UsersTable from "./users-table";
 
 const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
 
@@ -152,24 +153,14 @@ export default async function AdminPage() {
 
       <section className="card" style={{ marginBottom: 24 }}>
         <h2>Usuarios</h2>
-        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 20 }}>
-          <thead>
-            <tr style={{ textAlign: "left" }}>
-              <th>Correo</th>
-              <th>Rol</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(memberships ?? []).map((m) => (
-              <tr key={m.user_id}>
-                <td>{emailById.get(m.user_id) ?? m.user_id}</td>
-                <td>{m.role}</td>
-                <td>{m.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <UsersTable
+          initialMembers={(memberships ?? []).map((m) => ({
+            user_id: m.user_id,
+            email: emailById.get(m.user_id) ?? m.user_id,
+            role: m.role,
+            status: m.status,
+          }))}
+        />
         <InviteUserForm />
       </section>
     </main>

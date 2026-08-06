@@ -1,7 +1,7 @@
 .shell{min-height:100vh;background:var(--bg);color:var(--text);display:grid;grid-template-columns:248px 1fr;font-family:var(--font-body)}
 
 .sidebar{padding:26px 18px;border-right:1px solid var(--border);background:#12151a;display:flex;flex-direction:column;gap:20px;position:sticky;top:0;height:100vh}
-.brand h2{margin:0;font-family:var(--font-display);font-weight:600;font-size:1.4rem;display:flex;align-items:center;gap:9px}
+.brand h2{margin:0;font-family:var(--font-body);font-weight:600;font-size:1.4rem;display:flex;align-items:center;gap:9px}
 .brand h2::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px rgba(255,106,57,.7)}
 .brand h2 span{display:block;color:var(--muted);font-weight:500}
 .brand p{margin:6px 0 0 18px;color:var(--muted);font-size:.85rem;font-family:var(--font-mono)}
@@ -21,7 +21,7 @@
 .header h1{margin:6px 0 0;font-size:2.1rem}
 .headerActions{display:flex;gap:8px;align-items:center}
 
-.button,.secondary,.danger,.ghost{border:0;border-radius:7px;padding:11px 17px;cursor:pointer;font-weight:600;font-size:1rem;font-family:var(--font-display);transition:filter .12s ease,border-color .12s ease}
+.button,.secondary,.danger,.ghost{border:0;border-radius:7px;padding:11px 17px;cursor:pointer;font-weight:600;font-size:1rem;font-family:var(--font-body);transition:filter .12s ease,border-color .12s ease}
 .button{background:var(--accent);color:#181109}
 .button:hover{filter:brightness(1.08)}
 .secondary{background:var(--panel);color:var(--text);border:1px solid var(--border)}
@@ -32,7 +32,7 @@
 
 .notice,.roleBanner{border:1px solid var(--border);background:var(--panel);border-radius:9px;padding:14px 16px;margin-bottom:16px;color:var(--text);font-size:.98rem}
 .roleBanner{display:flex;justify-content:space-between;gap:12px;align-items:center}
-.roleBanner strong{color:var(--text);font-family:var(--font-display)}
+.roleBanner strong{color:var(--text);font-family:var(--font-body)}
 
 .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
 .metric,.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.18)}
