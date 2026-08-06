@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import twilio from "twilio";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 // Twilio sends WhatsApp webhooks as application/x-www-form-urlencoded.
 // We take the inbound message, run it through our own orchestrator
@@ -59,6 +60,18 @@ export async function POST(request: Request) {
   const secret = process.env.TECHCOMM_TOOL_SECRET;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
+  const supabase = getSupabaseAdmin();
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("channel", "whatsapp")
+    .eq("external_id", phone)
+    .eq("status", "open")
+    .gte("started_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   try {
     const response = await fetch(`${appUrl}/api/agent/orchestrate`, {
       method: "POST",
@@ -69,7 +82,8 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         message: body,
         channel: "whatsapp",
-        customer_phone: phone
+        customer_phone: phone,
+        conversation_id: existing?.id ?? undefined
       })
     });
 

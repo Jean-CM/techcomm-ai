@@ -147,7 +147,7 @@ export async function POST(request: Request) {
   if (!conversationId) {
     const { data: created } = await supabase
       .from("conversations")
-      .insert({ channel, status: "open", started_at: new Date().toISOString() })
+      .insert({ channel, status: "open", started_at: new Date().toISOString(), external_id: body.customer_phone ?? null })
       .select("id")
       .single();
     conversationId = created?.id ?? null;
