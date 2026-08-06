@@ -144,6 +144,19 @@ export async function POST(request: Request) {
 
   // Resolve or create the conversation so we keep real history across turns.
   let conversationId = body.conversation_id ?? null;
+  if (!conversationId && body.customer_phone) {
+    const { data: existing } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("channel", channel)
+      .eq("external_id", body.customer_phone)
+      .eq("status", "open")
+      .gte("started_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString())
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    conversationId = existing?.id ?? null;
+  }
   if (!conversationId) {
     const { data: created } = await supabase
       .from("conversations")
