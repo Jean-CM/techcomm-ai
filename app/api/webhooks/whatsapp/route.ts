@@ -35,7 +35,14 @@ export async function POST(request: Request) {
   const fullUrl = host ? `${proto}://${host}/api/webhooks/whatsapp` : request.url;
 
   if (!verifyTwilioSignature(fullUrl, params, signature)) {
-    console.error("Twilio signature mismatch", { fullUrl, hasSignature: Boolean(signature), hasToken: Boolean(process.env.TWILIO_AUTH_TOKEN) });
+    const token = process.env.TWILIO_AUTH_TOKEN ?? "";
+    console.error("Twilio signature mismatch", {
+      fullUrl,
+      hasSignature: Boolean(signature),
+      hasToken: Boolean(process.env.TWILIO_AUTH_TOKEN),
+      tokenLength: token.length,
+      tokenPreview: token ? `${token.slice(0, 4)}...${token.slice(-4)}` : null
+    });
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
