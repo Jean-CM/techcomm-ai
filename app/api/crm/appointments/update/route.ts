@@ -14,6 +14,7 @@ const ALLOWED_STATUSES = new Set(["scheduled", "confirmed", "rescheduled", "comp
 const SERVICE_TIME_ZONE = "America/Santo_Domingo";
 const OPEN_MINUTES = 8 * 60;
 const CLOSE_MINUTES = 16 * 60;
+const DEFAULT_APPOINTMENT_MINUTES = 60;
 
 function minutesInSantoDomingo(date: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const { data: current, error: currentError } = await supabase
     .from("appointments")
-    .select("id,customer_id,technician_id,starts_at,status,address,notes")
+    .select("id,customer_id,technician_id,starts_at,ends_at,status,address,notes")
     .eq("id", body.id)
     .single();
 
@@ -73,6 +74,38 @@ export async function POST(request: Request) {
     changes.status = body.status;
   }
 
+  const targetTechnicianId = body.technician_id !== undefined ? body.technician_id : current.technician_id;
+  const targetStartsAt = new Date(String(changes.starts_at ?? current.starts_at));
+  const targetEndsAt = current.ends_at
+    ? new Date(current.ends_at)
+    : new Date(targetStartsAt.getTime() + DEFAULT_APPOINTMENT_MINUTES * 60 * 1000);
+
+  let scheduleConflict: { id: string; starts_at: string; ends_at?: string | null; customer_id?: string | null } | null = null;
+
+  if (targetTechnicianId && !Number.isNaN(targetStartsAt.getTime())) {
+    const conflictWindowStart = new Date(targetStartsAt.getTime() - DEFAULT_APPOINTMENT_MINUTES * 60 * 1000).toISOString();
+    const conflictWindowEnd = targetEndsAt.toISOString();
+
+    const { data: nearbyAppointments } = await supabase
+      .from("appointments")
+      .select("id,customer_id,starts_at,ends_at,status")
+      .eq("technician_id", targetTechnicianId)
+      .neq("id", body.id)
+      .not("status", "in", "(completed,cancelled)")
+      .gte("starts_at", conflictWindowStart)
+      .lt("starts_at", conflictWindowEnd)
+      .order("starts_at", { ascending: true })
+      .limit(10);
+
+    scheduleConflict = (nearbyAppointments ?? []).find((item) => {
+      const otherStart = new Date(item.starts_at);
+      const otherEnd = item.ends_at
+        ? new Date(item.ends_at)
+        : new Date(otherStart.getTime() + DEFAULT_APPOINTMENT_MINUTES * 60 * 1000);
+      return otherStart < targetEndsAt && otherEnd > targetStartsAt;
+    }) ?? null;
+  }
+
   const { data: appointment, error } = await supabase
     .from("appointments")
     .update(changes)
@@ -91,6 +124,11 @@ export async function POST(request: Request) {
       .eq("appointment_id", body.id);
   }
 
+  const warnings = [
+    outsideHours ? "Programada fuera del horario habitual (8:00 a. m.–4:00 p. m.) por anulación manual." : null,
+    scheduleConflict ? "Advertencia: el técnico seleccionado ya tiene otra cita que se cruza con este horario. El cambio fue guardado, pero conviene revisar la agenda." : null,
+  ].filter(Boolean);
+
   await supabase.from("crm_audit_log").insert({
     entity_type: "appointments",
     entity_id: body.id,
@@ -99,12 +137,16 @@ export async function POST(request: Request) {
     actor_role: body.actor_role?.trim() || "unknown",
     before_data: current,
     after_data: appointment,
-    metadata: outsideHours ? { manual_override_outside_hours: true } : {},
+    metadata: {
+      ...(outsideHours ? { manual_override_outside_hours: true } : {}),
+      ...(scheduleConflict ? { schedule_conflict_warning: true, conflicting_appointment_id: scheduleConflict.id } : {}),
+    },
   });
 
   return NextResponse.json({
     ok: true,
     appointment,
-    warning: outsideHours ? "Programada fuera del horario habitual (8:00 a. m.–4:00 p. m.) por anulación manual." : null,
+    warning: warnings.length ? warnings.join(" ") : null,
+    schedule_conflict: scheduleConflict,
   });
 }

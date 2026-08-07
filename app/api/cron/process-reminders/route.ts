@@ -67,7 +67,7 @@ export async function GET(request: Request) {
     const [{ data: workOrder }, { data: technician }] = await Promise.all([
       supabase.from("work_orders").select("equipment,issue,order_number").eq("appointment_id", reminder.appointment_id).maybeSingle(),
       appointment?.technician_id
-        ? supabase.from("technicians").select("name").eq("id", appointment.technician_id).maybeSingle()
+        ? supabase.from("technicians").select("full_name").eq("id", appointment.technician_id).maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
 
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
               customer_name: reminder.customer_name ?? "cliente",
               appointment_time: appointmentTime,
               reminder_window: "en aproximadamente 45 minutos",
-              technician_name: technician?.name ?? "un técnico de nuestro equipo",
+              technician_name: technician?.full_name ?? "un técnico de nuestro equipo",
               equipment: workOrder?.equipment ?? "el equipo reportado",
               issue: workOrder?.issue ?? "la falla reportada",
               order_number: workOrder?.order_number ?? "",
