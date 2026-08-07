@@ -67,7 +67,6 @@ export default async function AdminPage() {
           <h1 style={{ marginBottom: 4 }}>Control digital — Techcomm AI</h1>
           <p className="muted" style={{ margin: 0 }}>{user.email} · rol {membership.role}</p>
         </div>
-        <Link className="button" href="/dashboard">Volver al panel</Link>
         <Link className="button" href="/crm">Ir al CRM</Link>
       </header>
 

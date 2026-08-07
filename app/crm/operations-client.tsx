@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import styles from "./operations-client.module.css";
 import { signOut } from "../login/actions";
 
@@ -193,6 +194,7 @@ export default function OperationsClient(){
       <div className={styles.roleCard}><small>Vista de perfil</small><select value={role} onChange={event=>setRole(event.target.value as Role)}>{Object.entries(ROLE_META).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></div>
       <nav className={styles.nav}>{ROLE_META[role].menus.map(item=><button key={item} className={active===item?styles.active:""} onClick={()=>setActive(item)}>{item}</button>)}</nav>
       <button type="button" className={styles.ghost} style={{marginTop:"auto"}} onClick={()=>void signOut()}>Cerrar sesión</button>
+      <Link className={styles.ghost} href="/admin" style={{textAlign:"center"}}>Super Admin</Link>
       <div className={styles.sidebarFoot}><span className={styles.dot}/>Supabase conectado<br/><span className={styles.dot}/>WhatsApp y voz activos<br/><span className={styles.dot}/>Sesión se cierra sola tras 5 min inactivo</div>
     </aside>
 
