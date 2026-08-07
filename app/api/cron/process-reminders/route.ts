@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   }
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
-  const agentId = process.env.ELEVENLABS_AGENT_ID;
+  const agentId = process.env.ELEVENLABS_REMINDER_AGENT_ID || process.env.ELEVENLABS_AGENT_ID;
   const phoneNumberId = process.env.ELEVENLABS_PHONE_NUMBER_ID;
   if (!apiKey || !agentId || !phoneNumberId) {
     return NextResponse.json({ ok: false, error: "Falta ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID o ELEVENLABS_PHONE_NUMBER_ID" }, { status: 503 });
