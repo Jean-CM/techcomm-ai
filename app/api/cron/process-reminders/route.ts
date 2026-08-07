@@ -82,6 +82,7 @@ export async function GET(request: Request) {
           call_recording_enabled: false,
           conversation_initiation_client_data: {
             dynamic_variables: {
+              appointment_id: reminder.appointment_id,
               customer_name: reminder.customer_name ?? "cliente",
               appointment_time: appointmentTime,
               reminder_window: "en aproximadamente 45 minutos",

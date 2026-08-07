@@ -274,14 +274,27 @@ export async function POST(request: Request) {
 
     const appointmentId = asString(dynamicVariables.appointment_id);
     const appointmentStatus = readNestedString(collected, "appointment_status");
-    if (appointmentId && appointmentStatus) {
-      const mapped = appointmentStatus === "confirmada"
-        ? { status: "confirmed", confirmation_status: "confirmed" }
-        : appointmentStatus === "cancelada"
-          ? { status: "cancelled", confirmation_status: "cancelled" }
-          : appointmentStatus === "reprogramada"
-            ? { status: "rescheduled", confirmation_status: "reschedule_requested" }
-            : null;
+    const callDurationForValidation = Number(
+      metadata.call_duration_secs ?? metadata.duration_secs ?? data.call_duration_secs ?? 0
+    );
+    // A real confirmation requires an actual back-and-forth. Voicemail pickups
+    // and rings-with-no-answer produce very short "calls" with little to no
+    // customer speech — never treat these as a confirmation, no matter what
+    // the agent's own classification says, since it may have nothing real to
+    // classify from.
+    const userTurns = transcript.filter((item) => item.role === "user").length;
+    const looksUnreachable = callDurationForValidation > 0 && (callDurationForValidation < 12 || userTurns === 0);
+
+    if (appointmentId) {
+      const mapped = looksUnreachable
+        ? { confirmation_status: "unreachable" }
+        : appointmentStatus === "confirmada"
+          ? { status: "confirmed", confirmation_status: "confirmed" }
+          : appointmentStatus === "cancelada"
+            ? { status: "cancelled", confirmation_status: "cancelled" }
+            : appointmentStatus === "reprogramada"
+              ? { status: "rescheduled", confirmation_status: "reschedule_requested" }
+              : null;
       if (mapped) await supabase.from("appointments").update(mapped).eq("id", appointmentId);
     }
 
