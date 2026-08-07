@@ -58,6 +58,19 @@ export async function GET(request: Request) {
       ? new Intl.DateTimeFormat("es-DO", { timeZone: "America/Santo_Domingo", hour: "numeric", minute: "2-digit" }).format(new Date(reminder.appointment_starts_at))
       : "la hora acordada";
 
+    const { data: appointment } = await supabase
+      .from("appointments")
+      .select("address, technician_id")
+      .eq("id", reminder.appointment_id)
+      .maybeSingle();
+
+    const [{ data: workOrder }, { data: technician }] = await Promise.all([
+      supabase.from("work_orders").select("equipment,issue,order_number").eq("appointment_id", reminder.appointment_id).maybeSingle(),
+      appointment?.technician_id
+        ? supabase.from("technicians").select("name").eq("id", appointment.technician_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
     try {
       const callResponse = await fetch("https://api.elevenlabs.io/v1/convai/twilio/outbound-call", {
         method: "POST",
@@ -72,6 +85,11 @@ export async function GET(request: Request) {
               customer_name: reminder.customer_name ?? "cliente",
               appointment_time: appointmentTime,
               reminder_window: "en aproximadamente 45 minutos",
+              technician_name: technician?.name ?? "un técnico de nuestro equipo",
+              equipment: workOrder?.equipment ?? "el equipo reportado",
+              issue: workOrder?.issue ?? "la falla reportada",
+              order_number: workOrder?.order_number ?? "",
+              address: appointment?.address ?? "",
             },
           },
         }),
