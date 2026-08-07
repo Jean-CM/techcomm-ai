@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   }
 
   const changes: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  let nextStart = new Date(current.starts_at);
+  let outsideHours = false;
 
   if (body.starts_at) {
     const parsed = new Date(body.starts_at);
@@ -53,10 +53,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "La fecha y hora no son válidas." }, { status: 400 });
     }
     const minutes = minutesInSantoDomingo(parsed);
-    if (minutes < OPEN_MINUTES || minutes > CLOSE_MINUTES) {
-      return NextResponse.json({ ok: false, error: "La cita debe programarse entre 8:00 a. m. y 4:00 p. m." }, { status: 400 });
-    }
-    nextStart = parsed;
+    outsideHours = minutes < OPEN_MINUTES || minutes > CLOSE_MINUTES;
     changes.starts_at = parsed.toISOString();
     changes.status = body.status || "rescheduled";
     changes.confirmation_status = "pending";
@@ -94,25 +91,6 @@ export async function POST(request: Request) {
       .eq("appointment_id", body.id);
   }
 
-  const { data: customer } = current.customer_id
-    ? await supabase.from("customers").select("full_name,phone").eq("id", current.customer_id).maybeSingle()
-    : { data: null };
-
-  const reminderScheduledFor = new Date(nextStart.getTime() + 2 * 60 * 1000).toISOString();
-  await supabase.from("call_reminders").upsert({
-    appointment_id: body.id,
-    call_type: "appointment_confirmation_test",
-    scheduled_for: reminderScheduledFor,
-    appointment_starts_at: nextStart.toISOString(),
-    customer_phone: customer?.phone || null,
-    customer_name: customer?.full_name || null,
-    status: appointment.status === "cancelled" ? "cancelled" : "pending",
-    attempts: 0,
-    last_error: null,
-    processed_at: null,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "appointment_id,call_type" });
-
   await supabase.from("crm_audit_log").insert({
     entity_type: "appointments",
     entity_id: body.id,
@@ -121,12 +99,12 @@ export async function POST(request: Request) {
     actor_role: body.actor_role?.trim() || "unknown",
     before_data: current,
     after_data: appointment,
-    metadata: { confirmation_call_test_at: reminderScheduledFor },
+    metadata: outsideHours ? { manual_override_outside_hours: true } : {},
   });
 
   return NextResponse.json({
     ok: true,
     appointment,
-    confirmation_call_test_at: reminderScheduledFor,
+    warning: outsideHours ? "Programada fuera del horario habitual (8:00 a. m.–4:00 p. m.) por anulación manual." : null,
   });
 }
