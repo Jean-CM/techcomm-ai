@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { signIn } from "./actions";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -21,6 +22,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </label>
           <button className="button" type="submit">Entrar</button>
         </form>
+        <Link className="muted" href="/forgot-password" style={{ display: "inline-block", marginTop: 14, fontSize: 14 }}>¿Olvidaste tu contraseña?</Link>
       </section>
     </main>
   );

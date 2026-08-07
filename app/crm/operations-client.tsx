@@ -2,6 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./operations-client.module.css";
+import { signOut } from "../login/actions";
+
+const INACTIVITY_LIMIT_MS = 5 * 60 * 1000;
 
 type Role = "super_admin" | "admin" | "secretary" | "supervisor";
 type Permission = "edit_customer" | "edit_technician" | "edit_product" | "reschedule" | "reassign" | "update_order" | "manual_management" | "view_financial";
@@ -77,6 +80,20 @@ export default function OperationsClient(){
   },[]);
 
   useEffect(()=>{ void load(); },[load]);
+  useEffect(()=>{
+    let timer: ReturnType<typeof setTimeout>;
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { void signOut(); }, INACTIVITY_LIMIT_MS);
+    };
+    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+    resetTimer();
+    return () => {
+      clearTimeout(timer);
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  },[]);
   useEffect(()=>{ if(!ROLE_META[role].menus.includes(active))setActive(ROLE_META[role].menus[0]); },[role,active]);
   useEffect(()=>{ setSearch("");setStatusFilter("all");setSecondaryFilter("all");setDateFilter(""); },[active]);
 
@@ -175,7 +192,8 @@ export default function OperationsClient(){
       <div className={styles.brand}><h2>Techcomm <span>Operations</span></h2><p>Centro de operaciones</p></div>
       <div className={styles.roleCard}><small>Vista de perfil</small><select value={role} onChange={event=>setRole(event.target.value as Role)}>{Object.entries(ROLE_META).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}</select></div>
       <nav className={styles.nav}>{ROLE_META[role].menus.map(item=><button key={item} className={active===item?styles.active:""} onClick={()=>setActive(item)}>{item}</button>)}</nav>
-      <div className={styles.sidebarFoot}><span className={styles.dot}/>Supabase conectado<br/><span className={styles.dot}/>WhatsApp y voz activos</div>
+      <button type="button" className={styles.ghost} style={{marginTop:"auto"}} onClick={()=>void signOut()}>Cerrar sesión</button>
+      <div className={styles.sidebarFoot}><span className={styles.dot}/>Supabase conectado<br/><span className={styles.dot}/>WhatsApp y voz activos<br/><span className={styles.dot}/>Sesión se cierra sola tras 5 min inactivo</div>
     </aside>
 
     <section className={styles.content}>

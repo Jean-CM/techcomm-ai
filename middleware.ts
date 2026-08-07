@@ -25,15 +25,19 @@ export async function middleware(request: NextRequest) {
     || request.nextUrl.pathname.startsWith("/admin");
   const isLogin = request.nextUrl.pathname.startsWith("/login");
   const isCrmApi = request.nextUrl.pathname.startsWith("/api/crm");
+  const isChangePassword = request.nextUrl.pathname.startsWith("/change-password");
+  const mustChangePassword = Boolean(user?.user_metadata?.must_change_password);
 
   if (isCrmApi && !user) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   if (isProtected && !user) return NextResponse.redirect(new URL("/login", request.url));
-  if (isLogin && user) return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (isProtected && mustChangePassword) return NextResponse.redirect(new URL("/change-password", request.url));
+  if (isChangePassword && !user) return NextResponse.redirect(new URL("/login", request.url));
+  if (isLogin && user) return NextResponse.redirect(new URL(mustChangePassword ? "/change-password" : "/dashboard", request.url));
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/crm/:path*", "/admin/:path*", "/login", "/api/crm/:path*"]
+  matcher: ["/dashboard/:path*", "/crm/:path*", "/admin/:path*", "/login", "/change-password", "/api/crm/:path*"]
 };

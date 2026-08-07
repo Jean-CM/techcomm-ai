@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     email,
     password: tempPassword,
     email_confirm: true,
-    user_metadata: body.full_name ? { full_name: body.full_name } : undefined
+    user_metadata: { ...(body.full_name ? { full_name: body.full_name } : {}), must_change_password: true }
   });
 
   if (createError || !created.user) {
