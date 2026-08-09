@@ -68,6 +68,7 @@ export default async function AdminPage() {
           <p className="muted" style={{ margin: 0 }}>{user.email} · rol {membership.role}</p>
         </div>
         <Link className="button" href="/crm">Ir al CRM</Link>
+        <Link className="button" href="/admin/auditoria">Auditoría de llamadas</Link>
       </header>
 
       <section className="grid grid-3" style={{ marginBottom: 24 }}>
