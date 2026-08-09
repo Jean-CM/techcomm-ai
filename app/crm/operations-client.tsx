@@ -62,7 +62,7 @@ export default function OperationsClient(){
   const [active,setActive]=useState("Dashboard");
   const [role,setRole]=useState<Role>("super_admin");
   const [modal,setModal]=useState<ModalState>(null);
-  const [conversationDetail,setConversationDetail]=useState<{messages:DetailMessage[];event?:CallEvent}|null>(null);
+  const [conversationDetail,setConversationDetail]=useState<{messages:DetailMessage[];event?:CallEvent;audio_url?:string|null}|null>(null);
   const [history,setHistory]=useState<TimelineItem[]>([]);
   const [search,setSearch]=useState("");
   const [statusFilter,setStatusFilter]=useState("all");
@@ -173,7 +173,7 @@ export default function OperationsClient(){
     setModal({kind:"conversation",item}); setConversationDetail(null);
     const response=await fetch(`/api/crm/conversations/${item.id}`,{cache:"no-store"});
     const payload=await response.json();
-    if(response.ok)setConversationDetail({messages:payload.messages||[],event:payload.event});
+    if(response.ok)setConversationDetail({messages:payload.messages||[],event:payload.event,audio_url:payload.audio_url});
     else setMessage(payload.error||"No fue posible abrir la conversación.");
   }
 
@@ -261,7 +261,7 @@ export default function OperationsClient(){
     {modal&&<div className={styles.modalBack}><div className={`${styles.modal} ${(modal.kind==="conversation"||modal.kind==="history")?styles.modalWide:""}`}>
       <div className={styles.modalHead}><div><span className={styles.eyebrow}>TECHCOMM OPERATIONS</span><h2>{modal.kind==="manual"?"Nueva gestión":modal.kind==="appointment"?"Gestionar cita":modal.kind==="order"?"Gestionar orden":modal.kind==="conversation"?"Conversación completa":modal.kind==="history"?"Historial del cliente":`Editar ${modal.kind}`}</h2></div><button className={styles.close} onClick={()=>{setModal(null);setConversationDetail(null);setHistory([])}}>×</button></div>
 
-      {modal.kind==="conversation"&&<>{conversationDetail?<><div className={styles.detailGrid}><div className={styles.detailBox}><small>Canal</small><strong>{channel(modal.item)}</strong></div><div className={styles.detailBox}><small>Fecha</small><strong>{localDate(modal.item.created_at)}</strong></div><div className={styles.detailBox}><small>Teléfono</small><strong>{modal.item.customer_phone||"No disponible"}</strong></div></div><div className={styles.notice}>{conversationDetail.event?.summary||modal.item.summary||"Sin resumen"}</div><div className={styles.transcript}>{conversationDetail.messages.length?conversationDetail.messages.map(message=><div key={message.id} className={`${styles.bubble} ${message.role==="user"?styles.bubbleUser:""}`}><small>{message.role==="user"?"Cliente":"Techcomm Assistant"} · {localDate(message.created_at)}</small>{message.content}</div>):<div className={styles.empty}>No hay mensajes detallados disponibles.</div>}</div></>:<div className={styles.empty}>Cargando conversación...</div>}</>}
+      {modal.kind==="conversation"&&<>{conversationDetail?<><div className={styles.detailGrid}><div className={styles.detailBox}><small>Canal</small><strong>{channel(modal.item)}</strong></div><div className={styles.detailBox}><small>Fecha</small><strong>{localDate(modal.item.created_at)}</strong></div><div className={styles.detailBox}><small>Teléfono</small><strong>{modal.item.customer_phone||"No disponible"}</strong></div></div><div className={styles.notice}>{conversationDetail.event?.summary||modal.item.summary||"Sin resumen"}</div>{conversationDetail.audio_url?<div className={styles.notice}><small style={{display:"block",marginBottom:8,color:"var(--muted)"}}>Grabación de la llamada — conservada para fines regulatorios (INDOTEL)</small><audio controls style={{width:"100%"}} src={conversationDetail.audio_url} /></div>:null}<div className={styles.transcript}>{conversationDetail.messages.length?conversationDetail.messages.map(message=><div key={message.id} className={`${styles.bubble} ${message.role==="user"?styles.bubbleUser:""}`}><small>{message.role==="user"?"Cliente":"Techcomm Assistant"} · {localDate(message.created_at)}</small>{message.content}</div>):<div className={styles.empty}>No hay mensajes detallados disponibles.</div>}</div></>:<div className={styles.empty}>Cargando conversación...</div>}</>}
 
       {modal.kind==="history"&&<div className={styles.timeline}>{history.length?history.map(item=><div className={styles.timelineItem} key={item.id}><time>{localDate(item.date)}</time><div><strong>{item.title}</strong><p>{item.detail}</p><small>{item.type}</small></div></div>):<div className={styles.empty}>Cargando historial...</div>}</div>}
 

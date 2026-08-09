@@ -10,12 +10,20 @@ export async function GET(
 
   const { data: event, error } = await supabase
     .from("call_events")
-    .select("id,conversation_id,customer_phone,status,summary,transcript,analysis,metadata,payload,created_at")
+    .select("id,conversation_id,customer_phone,status,summary,transcript,analysis,metadata,payload,audio_storage_path,audio_captured_at,created_at")
     .eq("id", id)
     .single();
 
   if (error || !event) {
     return NextResponse.json({ ok: false, error: error?.message || "Conversación no encontrada." }, { status: 404 });
+  }
+
+  let audioUrl: string | null = null;
+  if (event.audio_storage_path) {
+    const { data: signed } = await supabase.storage
+      .from("call-recordings")
+      .createSignedUrl(event.audio_storage_path, 3600);
+    audioUrl = signed?.signedUrl ?? null;
   }
 
   const { data: conversation } = event.conversation_id
@@ -39,5 +47,6 @@ export async function GET(
     event,
     conversation,
     messages: messages ?? [],
+    audio_url: audioUrl,
   });
 }

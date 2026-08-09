@@ -208,6 +208,33 @@ export async function POST(request: Request) {
       { onConflict: "conversation_id,event_type" },
     );
 
+    // Capture the audio recording for regulatory retention (INDOTEL may request
+    // a specific call). Best-effort: a failure here must never break the rest
+    // of the webhook, since the transcript is already safely stored above.
+    if (conversationExternalId && process.env.ELEVENLABS_API_KEY) {
+      try {
+        const audioResponse = await fetch(
+          `https://api.elevenlabs.io/v1/convai/conversations/${conversationExternalId}/audio`,
+          { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
+        );
+        if (audioResponse.ok) {
+          const audioBuffer = await audioResponse.arrayBuffer();
+          const path = `${conversationExternalId}.mp3`;
+          const { error: uploadError } = await supabase.storage
+            .from("call-recordings")
+            .upload(path, Buffer.from(audioBuffer), { contentType: "audio/mpeg", upsert: true });
+          if (!uploadError) {
+            await supabase
+              .from("call_events")
+              .update({ audio_storage_path: path, audio_captured_at: new Date().toISOString() })
+              .eq("conversation_id", conversationExternalId);
+          }
+        }
+      } catch {
+        // Swallow — audio capture is best-effort and must not fail the webhook.
+      }
+    }
+
     if (conversationExternalId) {
       const { data: existingConversation } = await supabase
         .from("conversations")
