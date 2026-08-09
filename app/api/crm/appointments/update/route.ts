@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 type Payload = {
   id?: string;
@@ -118,10 +119,34 @@ export async function POST(request: Request) {
   }
 
   if (body.technician_id !== undefined) {
-    await supabase
-      .from("work_orders")
-      .update({ technician_id: body.technician_id || null, updated_at: new Date().toISOString() })
-      .eq("appointment_id", body.id);
+    if (body.technician_id) {
+      const token = crypto.randomUUID().replace(/-/g, "");
+      const { data: updatedOrder } = await supabase
+        .from("work_orders")
+        .update({ technician_id: body.technician_id, technician_access_token: token, updated_at: new Date().toISOString() })
+        .eq("appointment_id", body.id)
+        .select("order_number,equipment,issue")
+        .maybeSingle();
+
+      const { data: technician } = await supabase.from("technicians").select("phone").eq("id", body.technician_id).maybeSingle();
+      if (technician?.phone && updatedOrder) {
+        const digits = technician.phone.replace(/\D/g, "");
+        const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+        const e164 = /^(809|829|849)\d{7}$/.test(local) ? `+1${local}` : null;
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+        if (e164 && appUrl) {
+          await sendWhatsAppMessage(
+            e164,
+            `Nueva orden asignada: ${updatedOrder.order_number}\n${updatedOrder.equipment} — ${updatedOrder.issue}\n\nUsa este enlace para marcar tu progreso:\n${appUrl}/tecnico/${token}`
+          );
+        }
+      }
+    } else {
+      await supabase
+        .from("work_orders")
+        .update({ technician_id: null, updated_at: new Date().toISOString() })
+        .eq("appointment_id", body.id);
+    }
   }
 
   const warnings = [
