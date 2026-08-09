@@ -286,45 +286,23 @@ export async function POST(request: Request) {
     customer = data;
   }
 
-  const { data: availableTechnicians, error: technicianError } = await supabase
-    .from("technicians")
-    .select("id,full_name,phone,specialties,status")
-    .eq("active", true)
-    .eq("status", "available");
-  if (technicianError) return NextResponse.json({ ok: false, error: technicianError.message }, { status: 500 });
-
-  const technicianIds = (availableTechnicians ?? []).map((item) => item.id);
-  const workload = new Map<string, number>();
-  if (technicianIds.length) {
-    const { data: activeOrders, error: workloadError } = await supabase
-      .from("work_orders")
-      .select("technician_id,status")
-      .in("technician_id", technicianIds)
-      .not("status", "in", "(completed,cancelled)");
-    if (workloadError) return NextResponse.json({ ok: false, error: workloadError.message }, { status: 500 });
-    for (const order of activeOrders ?? []) {
-      if (order.technician_id) workload.set(order.technician_id, (workload.get(order.technician_id) || 0) + 1);
-    }
-  }
-
-  const technician = [...(availableTechnicians ?? [])].sort((a, b) => {
-    const loadDifference = (workload.get(a.id) || 0) - (workload.get(b.id) || 0);
-    if (loadDifference !== 0) return loadDifference;
-    return a.full_name.localeCompare(b.full_name);
-  })[0] || null;
+  // Technician assignment is manual by design (dispatcher decision) — the
+  // dispatcher needs visibility into zone, current workload, and specialty
+  // that only a human should judge for now. The AI never auto-assigns; every
+  // new order is created unassigned and shows up for manual dispatch in the CRM.
 
   const { data: appointment, error: appointmentError } = await supabase
     .from("appointments")
     .insert({
       customer_id: customer.id,
-      technician_id: technician?.id || null,
+      technician_id: null,
       starts_at: scheduledAt!.toISOString(),
       address,
       status: "scheduled",
       confirmation_status: "pending",
-      technician_confirmation_status: technician ? "confirmed" : "pending",
-      technician_confirmation_at: technician ? new Date().toISOString() : null,
-      requires_manual_assignment: !technician,
+      technician_confirmation_status: "pending",
+      technician_confirmation_at: null,
+      requires_manual_assignment: true,
       notes: `${equipment}: ${issue}`,
     })
     .select("id,starts_at,technician_id")
@@ -340,7 +318,7 @@ export async function POST(request: Request) {
       order_number: number,
       customer_id: customer.id,
       appointment_id: appointment.id,
-      technician_id: technician?.id || null,
+      technician_id: null,
       equipment,
       brand: cleanText(body.brand) || null,
       model: cleanText(body.model) || null,
@@ -363,13 +341,9 @@ export async function POST(request: Request) {
     customer,
     appointment,
     service_hours: "8:00 a. m. a 4:00 p. m.",
-    technician: technician
-      ? { id: technician.id, name: technician.full_name, phone: technician.phone }
-      : null,
-    technician_assigned: Boolean(technician),
-    requires_manual_assignment: !technician,
-    customer_message: technician
-      ? `Listo, ${name}. Tu visita quedó programada para ${appointmentLabel}. La orden es ${number}. La visita cuesta RD$500 y ese monto se acredita a la factura si realizas la reparación con Techcomm. Ya se asignó un técnico disponible.`
-      : `Listo, ${name}. Tu visita quedó programada para ${appointmentLabel}. La orden es ${number}. La visita cuesta RD$500 y ese monto se acredita a la factura si realizas la reparación con Techcomm. La asignación del técnico quedó pendiente en el CRM.`,
+    technician: null,
+    technician_assigned: false,
+    requires_manual_assignment: true,
+    customer_message: `Listo, ${name}. Tu visita quedó programada para ${appointmentLabel}. La orden es ${number}. La visita cuesta RD$500 y ese monto se acredita a la factura si realizas la reparación con Techcomm. La asignación del técnico quedó pendiente en el CRM.`,
   });
 }
