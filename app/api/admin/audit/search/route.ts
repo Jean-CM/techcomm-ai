@@ -60,6 +60,7 @@ export async function GET(request: Request) {
   let eventsQuery = admin
     .from("call_events")
     .select("id,conversation_id,customer_phone,status,summary,order_id,audio_storage_path,audio_captured_at,metadata,analysis,created_at")
+    .eq("event_type", "post_call_transcription")
     .order("created_at", { ascending: false })
     .limit(200);
 
