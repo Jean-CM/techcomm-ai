@@ -5,6 +5,11 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 type Row = Record<string, unknown>;
 type ItemType = "product" | "equipment" | "part" | "accessory";
 
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 5000;
+const MAX_IMPORT_COLUMNS = 100;
+const ALLOWED_EXTENSIONS = new Set(["xlsx", "xls", "csv"]);
+
 function normalize(value: string) {
   return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
@@ -25,13 +30,31 @@ function detectItemType(category: string, name: string): ItemType {
 }
 
 function extractRows(sheet: XLSX.WorkSheet): Row[] {
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+  const reference = sheet["!ref"];
+  if (!reference) return [];
+
+  const range = XLSX.utils.decode_range(reference);
+  const rowCount = range.e.r - range.s.r + 1;
+  const columnCount = range.e.c - range.s.c + 1;
+  if (rowCount > MAX_IMPORT_ROWS + 100) {
+    throw new Error(`El archivo supera el límite de ${MAX_IMPORT_ROWS} filas de datos.`);
+  }
+  if (columnCount > MAX_IMPORT_COLUMNS) {
+    throw new Error(`El archivo supera el límite de ${MAX_IMPORT_COLUMNS} columnas.`);
+  }
+
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
   const headerIndex = matrix.findIndex((row) => Array.isArray(row) && row.some((cell) => normalize(text(cell)) === "pieza"));
   if (headerIndex < 0) return [];
   const headers = (matrix[headerIndex] as unknown[]).map((cell) => normalize(text(cell)));
-  return matrix.slice(headerIndex + 1)
-    .filter((row) => Array.isArray(row) && row.some((cell) => text(cell)))
-    .map((row) => Object.fromEntries(headers.map((header, index) => [header, (row as unknown[])[index] ?? ""])));
+  const dataRows = matrix.slice(headerIndex + 1)
+    .filter((row) => Array.isArray(row) && row.some((cell) => text(cell)));
+
+  if (dataRows.length > MAX_IMPORT_ROWS) {
+    throw new Error(`El archivo supera el límite de ${MAX_IMPORT_ROWS} filas de datos.`);
+  }
+
+  return dataRows.map((row) => Object.fromEntries(headers.map((header, index) => [header, (row as unknown[])[index] ?? ""])));
 }
 
 export async function POST(request: Request) {
@@ -39,12 +62,34 @@ export async function POST(request: Request) {
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No se recibió el archivo." }, { status: 400 });
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!ALLOWED_EXTENSIONS.has(extension)) {
+    return NextResponse.json({ ok: false, error: "Formato no permitido. Usa XLSX, XLS o CSV." }, { status: 400 });
+  }
+  if (file.size <= 0) {
+    return NextResponse.json({ ok: false, error: "El archivo está vacío." }, { status: 400 });
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    return NextResponse.json({ ok: false, error: "El archivo supera el límite de 10 MB." }, { status: 413 });
+  }
+
+  let workbook: XLSX.WorkBook;
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    workbook = XLSX.read(buffer, { type: "buffer", dense: true });
+  } catch {
+    return NextResponse.json({ ok: false, error: "No fue posible leer el archivo. Verifica que no esté dañado." }, { status: 400 });
+  }
+
   const sheetName = workbook.SheetNames.find((name) => normalize(name) === "catalogo") ?? workbook.SheetNames[0];
   if (!sheetName) return NextResponse.json({ ok: false, error: "El archivo no contiene hojas." }, { status: 400 });
 
-  const rows = extractRows(workbook.Sheets[sheetName]);
+  let rows: Row[];
+  try {
+    rows = extractRows(workbook.Sheets[sheetName]);
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Archivo fuera de los límites permitidos." }, { status: 400 });
+  }
   if (!rows.length) return NextResponse.json({ ok: false, error: "No se encontró la fila de encabezados. Verifica que exista la columna Pieza." }, { status: 400 });
 
   const valid = rows.map((row, index) => {
