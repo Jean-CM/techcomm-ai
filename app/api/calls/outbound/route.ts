@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { requireToolSecret } from "@/lib/supabase-admin";
 
 type OutboundCallBody = {
   toNumber?: string;
@@ -14,7 +16,19 @@ function normalizeE164DominicanPhone(value: string) {
   return `+1${local}`;
 }
 
+async function isAuthorized(request: Request) {
+  if (requireToolSecret(request)) return true;
+  const supabase = await createClient().catch(() => null);
+  if (!supabase) return false;
+  const { data: { user } } = await supabase.auth.getUser();
+  return Boolean(user);
+}
+
 export async function POST(request: NextRequest) {
+  if (!(await isAuthorized(request))) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = process.env.ELEVENLABS_API_KEY;
   const agentId = process.env.ELEVENLABS_AGENT_ID;
   const phoneNumberId = process.env.ELEVENLABS_PHONE_NUMBER_ID;

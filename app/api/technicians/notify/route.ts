@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin, requireToolSecret } from "@/lib/supabase-admin";
 
 function whatsappId(phone: string) {
   const digits = phone.replace(/\D/g, "");
   return digits.length === 10 ? `1${digits}` : digits;
 }
 
+async function isAuthorized(request: Request) {
+  if (requireToolSecret(request)) return true;
+  const supabase = await createClient().catch(() => null);
+  if (!supabase) return false;
+  const { data: { user } } = await supabase.auth.getUser();
+  return Boolean(user);
+}
+
 export async function POST(request: Request) {
+  if (!(await isAuthorized(request))) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   const { appointmentId } = await request.json().catch(() => ({})) as { appointmentId?: string };
   if (!appointmentId) return NextResponse.json({ ok:false,error:"appointmentId is required" }, { status:400 });
 
