@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type OrderData = {
   order: {
@@ -23,18 +23,19 @@ export default function TechnicianView({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const response = await fetch(`/api/tecnico/${token}`, { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Enlace inválido");
       setData(payload);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar");
     }
-  }
+  }, [token]);
 
-  useEffect(() => { void load(); }, [token]);
+  useEffect(() => { void load(); }, [load]);
 
   async function act(action: "salio" | "llego" | "termino") {
     setLoadingAction(action);
