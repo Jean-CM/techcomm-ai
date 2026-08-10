@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.github
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.vercel
+supabase/.temp
+secrets
+*.pem
+*.key
+*.p12
+*.pfx
+Techcomm_Operations_Presentacion_Ejecutiva.pptx
