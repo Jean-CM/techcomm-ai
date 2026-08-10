@@ -10,10 +10,29 @@ type Result = {
   national_id: string | null;
   status: string | null;
   summary: string | null;
+  order_number: string | null;
+  duration_seconds: number;
+  termination_reason: string | null;
+  call_successful: boolean | null;
+  call_success_score: number | null;
+  sentiment: string | null;
   has_audio: boolean;
   audio_captured_at: string | null;
   created_at: string;
 };
+
+function durationLabel(seconds: number) {
+  const safe = Number.isFinite(seconds) ? Math.max(0, Math.round(seconds)) : 0;
+  const minutes = Math.floor(safe / 60);
+  const remainder = safe % 60;
+  return minutes ? `${minutes}m ${remainder}s` : `${remainder}s`;
+}
+
+function resultLabel(result: Result) {
+  if (result.call_successful === true) return "Exitosa";
+  if (result.call_successful === false) return "No exitosa";
+  return result.status || "Sin clasificar";
+}
 
 export default function AuditSearch() {
   const [dateFrom, setDateFrom] = useState("");
@@ -87,9 +106,9 @@ export default function AuditSearch() {
       <section className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <h3 style={{ margin: 0 }}>Recuperar grabaciones anteriores</h3>
+            <h3 style={{ margin: 0 }}>Auditoría de llamadas</h3>
             <p className="muted" style={{ margin: "4px 0 0" }}>
-              Llamadas de antes de hoy no tienen audio guardado — intenta recuperarlas desde ElevenLabs (puede fallar en llamadas muy antiguas).
+              La vista principal usa datos resumidos. La grabación se solicita únicamente al pulsar Escuchar y solo está disponible para Super Admin / Admin.
             </p>
           </div>
           <button className="button" onClick={runBackfill} disabled={backfillLoading}>
@@ -131,43 +150,55 @@ export default function AuditSearch() {
       {results && (
         <section className="card">
           <h3 style={{ marginTop: 0 }}>{results.length} resultado{results.length === 1 ? "" : "s"}</h3>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left" }}>
-                <th>Fecha</th>
-                <th>Cliente</th>
-                <th>Teléfono</th>
-                <th>Cédula</th>
-                <th>Resumen</th>
-                <th>Audio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.map((r) => (
-                <tr key={r.id}>
-                  <td>{new Date(r.created_at).toLocaleString("es-DO")}</td>
-                  <td>{r.customer_name || "—"}</td>
-                  <td>{r.customer_phone || "—"}</td>
-                  <td>{r.national_id || "—"}</td>
-                  <td style={{ maxWidth: 320 }}>{r.summary || "Sin resumen"}</td>
-                  <td>
-                    {r.has_audio ? (
-                      playingId === r.id ? (
-                        audioUrl ? <audio controls autoPlay style={{ width: 220 }} src={audioUrl} /> : <span className="muted">Cargando...</span>
-                      ) : (
-                        <button className="button" style={{ padding: "6px 12px" }} onClick={() => playAudio(r.id)}>Escuchar</button>
-                      )
-                    ) : (
-                      <span className="muted">Sin audio</span>
-                    )}
-                  </td>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ textAlign: "left" }}>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Teléfono</th>
+                  <th>Cédula</th>
+                  <th>Orden</th>
+                  <th>Duración</th>
+                  <th>Resultado</th>
+                  <th>Resumen</th>
+                  <th>Audio</th>
                 </tr>
-              ))}
-              {results.length === 0 && (
-                <tr><td colSpan={6} className="muted">Sin resultados para estos filtros.</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {results.map((r) => (
+                  <tr key={r.id}>
+                    <td>{new Date(r.created_at).toLocaleString("es-DO")}</td>
+                    <td>{r.customer_name || "—"}</td>
+                    <td>{r.customer_phone || "—"}</td>
+                    <td>{r.national_id || "—"}</td>
+                    <td>{r.order_number || "—"}</td>
+                    <td>{durationLabel(r.duration_seconds)}</td>
+                    <td>
+                      <strong>{resultLabel(r)}</strong>
+                      {r.sentiment && <div className="muted" style={{ fontSize: 12 }}>{r.sentiment}</div>}
+                      {r.termination_reason && <div className="muted" style={{ fontSize: 12 }}>{r.termination_reason}</div>}
+                    </td>
+                    <td style={{ maxWidth: 340 }}>{r.summary || "Sin resumen"}</td>
+                    <td>
+                      {r.has_audio ? (
+                        playingId === r.id ? (
+                          audioUrl ? <audio controls autoPlay style={{ width: 220 }} src={audioUrl} /> : <span className="muted">Cargando...</span>
+                        ) : (
+                          <button className="button" style={{ padding: "6px 12px" }} onClick={() => playAudio(r.id)}>Escuchar</button>
+                        )
+                      ) : (
+                        <span className="muted">Sin audio</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {results.length === 0 && (
+                  <tr><td colSpan={9} className="muted">Sin resultados para estos filtros.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
     </div>
