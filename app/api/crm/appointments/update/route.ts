@@ -120,10 +120,9 @@ export async function POST(request: Request) {
 
   if (body.technician_id !== undefined) {
     if (body.technician_id) {
-      const token = crypto.randomUUID().replace(/-/g, "");
       const { data: updatedOrder } = await supabase
         .from("work_orders")
-        .update({ technician_id: body.technician_id, technician_access_token: token, updated_at: new Date().toISOString() })
+        .update({ technician_id: body.technician_id, updated_at: new Date().toISOString() })
         .eq("appointment_id", body.id)
         .select("order_number,equipment,issue")
         .maybeSingle();
@@ -137,7 +136,7 @@ export async function POST(request: Request) {
         if (e164 && appUrl) {
           await sendWhatsAppMessage(
             e164,
-            `Nueva orden asignada: ${updatedOrder.order_number}\n${updatedOrder.equipment} — ${updatedOrder.issue}\n\nUsa este enlace para marcar tu progreso:\n${appUrl}/tecnico/${token}`
+            `Nueva orden asignada: ${updatedOrder.order_number}\n${updatedOrder.equipment} — ${updatedOrder.issue}\n\nEntra a tu portal para verla y marcar tu progreso:\n${appUrl}/tecnico`
           );
         }
       }

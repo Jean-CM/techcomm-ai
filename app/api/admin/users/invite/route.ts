@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
-const ALLOWED_ROLES = ["owner", "admin", "manager", "analyst", "agent", "viewer"];
+const ALLOWED_ROLES = ["owner", "admin", "manager", "analyst", "agent", "viewer", "technician"];
 
 function generateTempPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
@@ -33,11 +33,14 @@ export async function POST(request: Request) {
   }
 
   // 2. Validate input.
-  const body = (await request.json().catch(() => ({}))) as { email?: string; role?: string; full_name?: string };
+  const body = (await request.json().catch(() => ({}))) as { email?: string; role?: string; full_name?: string; phone?: string };
   const email = body.email?.trim().toLowerCase();
   const role = body.role;
   if (!email || !role || !ALLOWED_ROLES.includes(role)) {
     return NextResponse.json({ ok: false, error: "email y role válidos son requeridos" }, { status: 400 });
+  }
+  if (role === "technician" && !body.phone?.trim()) {
+    return NextResponse.json({ ok: false, error: "El teléfono es requerido para crear un perfil de técnico." }, { status: 400 });
   }
 
   // 3. Create the auth user with a temporary password (no email service configured yet,
@@ -47,11 +50,29 @@ export async function POST(request: Request) {
     email,
     password: tempPassword,
     email_confirm: true,
-    user_metadata: { ...(body.full_name ? { full_name: body.full_name } : {}), must_change_password: true }
+    user_metadata: {
+      ...(body.full_name ? { full_name: body.full_name } : {}),
+      must_change_password: true,
+      ...(role === "technician" ? { app_role: "technician" } : {}),
+    }
   });
 
   if (createError || !created.user) {
     return NextResponse.json({ ok: false, error: createError?.message ?? "No se pudo crear el usuario" }, { status: 500 });
+  }
+
+  if (role === "technician") {
+    const { error: technicianError } = await admin.from("technicians").insert({
+      organization_id: DEFAULT_ORG_ID,
+      user_id: created.user.id,
+      full_name: body.full_name?.trim() || email,
+      phone: body.phone!.trim(),
+      active: true,
+      status: "available",
+    });
+    if (technicianError) {
+      return NextResponse.json({ ok: false, error: `Usuario creado, pero falló vincular el perfil de técnico: ${technicianError.message}` }, { status: 500 });
+    }
   }
 
   // 4. Attach them to the organization with the requested role.

@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 
-const ROLES = ["owner", "admin", "manager", "analyst", "agent", "viewer"];
+const ROLES = ["owner", "admin", "manager", "analyst", "agent", "viewer", "technician"];
 
 export default function InviteUserForm() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState("agent");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ email: string; temp_password: string } | null>(null);
@@ -21,13 +22,14 @@ export default function InviteUserForm() {
       const response = await fetch("/api/admin/users/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role, full_name: fullName || undefined })
+        body: JSON.stringify({ email, role, full_name: fullName || undefined, phone: role === "technician" ? phone : undefined })
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "No se pudo crear el usuario");
       setResult({ email: payload.user.email, temp_password: payload.temp_password });
       setEmail("");
       setFullName("");
+      setPhone("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear el usuario");
     } finally {
@@ -44,8 +46,8 @@ export default function InviteUserForm() {
           <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </label>
         <label>
-          <div className="muted">Nombre (opcional)</div>
-          <input className="input" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <div className="muted">Nombre {role === "technician" ? "" : "(opcional)"}</div>
+          <input className="input" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} required={role === "technician"} />
         </label>
         <label>
           <div className="muted">Rol</div>
@@ -53,10 +55,21 @@ export default function InviteUserForm() {
             {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </label>
+        {role === "technician" && (
+          <label>
+            <div className="muted">Teléfono (WhatsApp)</div>
+            <input className="input" type="text" placeholder="8095551234" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+          </label>
+        )}
         <button className="button" type="submit" disabled={loading}>
           {loading ? "Creando..." : "Crear usuario"}
         </button>
       </form>
+      {role === "technician" && (
+        <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
+          Se crea automáticamente su perfil de técnico vinculado — al iniciar sesión entra directo a su portal de órdenes, no al CRM.
+        </p>
+      )}
 
       {error && <p style={{ color: "crimson" }}>{error}</p>}
       {result && (
