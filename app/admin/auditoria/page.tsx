@@ -32,10 +32,10 @@ export default async function AuditPage() {
           <span className="badge">Super Admin / Admin</span>
           <h1 style={{ marginBottom: 4 }}>Auditoría de llamadas</h1>
           <p className="muted" style={{ margin: 0 }}>
-            Busca grabaciones por fecha, teléfono, cédula o cliente — para responder a solicitudes de INDOTEL u otra entidad reguladora.
+            Consulta llamadas por fecha, teléfono, cédula o cliente, revisa su resultado y reproduce la grabación cuando sea necesario.
           </p>
         </div>
-        <Link className="button" href="/admin">Volver a Super Admin</Link>
+        <Link className="button" href="/crm">Volver a Techcomm Operations</Link>
       </header>
 
       <AuditSearch />
