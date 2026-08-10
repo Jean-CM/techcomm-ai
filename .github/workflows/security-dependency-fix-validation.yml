@@ -1,0 +1,53 @@
+name: Security dependency fix validation
+
+on:
+  push:
+    branches:
+      - security-dependency-audit-fix-2026-08-09
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Refresh lockfile for patched overrides
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Install exact dependency tree
+        run: npm ci --ignore-scripts
+
+      - name: Confirm patched versions
+        run: npm ls next react react-dom postcss sharp xlsx
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit refreshed lockfile
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json already current"
+            exit 0
+          fi
+          git config user.name "Techcomm Security Bot"
+          git config user.email "security-bot@techcomm.local"
+          git add package-lock.json
+          git commit -m "chore: lock patched PostCSS and sharp versions"
+          git push origin HEAD:security-dependency-audit-fix-2026-08-09
