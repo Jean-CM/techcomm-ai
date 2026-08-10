@@ -51,12 +51,15 @@ export default async function OperationalHealthPage() {
   const supabase = getSupabaseAdmin();
   const now = new Date();
   const overdueCutoff = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+  const recentCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
   const [remindersResult, appointmentsResult, ordersResult, callsResult] = await Promise.all([
     supabase
       .from("call_reminders")
       .select("id,appointment_id,status,scheduled_for,customer_name,customer_phone,last_error,attempts")
       .in("status", ["pending", "failed"])
+      .eq("call_type", "appointment_reminder")
+      .gte("scheduled_for", recentCutoff)
       .order("scheduled_for", { ascending: false })
       .limit(100),
     supabase
@@ -75,6 +78,7 @@ export default async function OperationalHealthPage() {
       .from("call_events")
       .select("id,status,customer_phone,summary,created_at")
       .in("status", ["failed", "error"])
+      .gte("created_at", recentCutoff)
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
@@ -107,7 +111,12 @@ export default async function OperationalHealthPage() {
     }
   }
 
-  const alertCount = failedReminders.length + overdueReminders.length + unassignedAppointments.length + failedCalls.length + conflictPairs.length;
+  const alertCount = failedReminders.length
+    + overdueReminders.length
+    + unassignedAppointments.length
+    + unassignedOrders.length
+    + failedCalls.length
+    + conflictPairs.length;
   const healthy = alertCount === 0;
 
   const cardStyle = {
@@ -124,7 +133,7 @@ export default async function OperationalHealthPage() {
           <div>
             <small style={{ color: "#ff8a3d", fontWeight: 800, letterSpacing: ".12em" }}>TECHCOMM OPERATIONS</small>
             <h1 style={{ margin: "7px 0 4px", fontSize: 30 }}>Monitor operativo</h1>
-            <p style={{ margin: 0, color: "#aeb7c4" }}>Alertas que requieren revisión sin alterar el flujo actual del CRM.</p>
+            <p style={{ margin: 0, color: "#aeb7c4" }}>Alertas recientes y pendientes que requieren revisión; el historial completo permanece disponible en Auditoría.</p>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <Link href="/crm" style={{ color: "white", border: "1px solid #384252", borderRadius: 10, padding: "10px 14px", textDecoration: "none" }}>Volver al CRM</Link>
@@ -185,7 +194,7 @@ export default async function OperationalHealthPage() {
                 <small style={{ color: "#ff9d8f" }}>{item.summary || item.status || "Error de llamada"}</small>
               </div>
             ))}
-            {!failedCalls.length && <p style={{ color: "#8bcaa7" }}>Sin llamadas fallidas registradas.</p>}
+            {!failedCalls.length && <p style={{ color: "#8bcaa7" }}>Sin llamadas fallidas registradas en las últimas 24 horas.</p>}
           </article>
         </section>
       </div>
