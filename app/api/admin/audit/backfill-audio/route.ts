@@ -27,11 +27,16 @@ export async function POST() {
   const { data: missing, error } = await admin
     .from("call_events")
     .select("id,conversation_id")
+    .eq("event_type", "post_call_transcription")
     .is("audio_storage_path", null)
     .not("conversation_id", "is", null)
+    .order("created_at", { ascending: false })
     .limit(50);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  if (!missing || missing.length === 0) return NextResponse.json({ ok: true, recovered: 0, failed: 0, details: [] });
+
+  if (!missing || missing.length === 0) {
+    return NextResponse.json({ ok: true, recovered: 0, failed: 0, remaining: 0, details: [] });
+  }
 
   const details: { conversation_id: string; ok: boolean; reason?: string }[] = [];
   let recovered = 0;
@@ -41,22 +46,29 @@ export async function POST() {
     try {
       const audioResponse = await fetch(
         `https://api.elevenlabs.io/v1/convai/conversations/${row.conversation_id}/audio`,
-        { headers: { "xi-api-key": apiKey } }
+        { headers: { "xi-api-key": apiKey } },
       );
       if (!audioResponse.ok) {
-        details.push({ conversation_id: row.conversation_id, ok: false, reason: `HTTP ${audioResponse.status} — probablemente ya no está disponible en ElevenLabs` });
+        details.push({ conversation_id: row.conversation_id, ok: false, reason: `HTTP ${audioResponse.status} — audio no disponible en ElevenLabs` });
         continue;
       }
+
       const audioBuffer = await audioResponse.arrayBuffer();
       const path = `${row.conversation_id}.mp3`;
       const { error: uploadError } = await admin.storage
         .from("call-recordings")
         .upload(path, Buffer.from(audioBuffer), { contentType: "audio/mpeg", upsert: true });
+
       if (uploadError) {
         details.push({ conversation_id: row.conversation_id, ok: false, reason: uploadError.message });
         continue;
       }
-      await admin.from("call_events").update({ audio_storage_path: path, audio_captured_at: new Date().toISOString() }).eq("id", row.id);
+
+      await admin
+        .from("call_events")
+        .update({ audio_storage_path: path, audio_captured_at: new Date().toISOString() })
+        .eq("id", row.id);
+
       recovered += 1;
       details.push({ conversation_id: row.conversation_id, ok: true });
     } catch (err) {
@@ -64,5 +76,18 @@ export async function POST() {
     }
   }
 
-  return NextResponse.json({ ok: true, recovered, failed: details.filter((d) => !d.ok).length, details });
+  const { count: remaining } = await admin
+    .from("call_events")
+    .select("id", { count: "exact", head: true })
+    .eq("event_type", "post_call_transcription")
+    .is("audio_storage_path", null)
+    .not("conversation_id", "is", null);
+
+  return NextResponse.json({
+    ok: true,
+    recovered,
+    failed: details.filter((detail) => !detail.ok).length,
+    remaining: remaining ?? 0,
+    details,
+  });
 }
