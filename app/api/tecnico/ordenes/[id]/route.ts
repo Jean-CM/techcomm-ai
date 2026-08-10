@@ -58,6 +58,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     product_name?: string;
     quantity?: number;
     unit_price?: number;
+    is_additional_purchase?: boolean;
   };
 
   const { data: order } = await admin!
@@ -72,17 +73,80 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   if (body.action === "add_material") {
     if (!body.product_name) return NextResponse.json({ ok: false, error: "product_name es requerido" }, { status: 400 });
+    const quantity = body.quantity ?? 1;
+    const unitPrice = body.unit_price ?? null;
+    let quoteId: string | null = null;
+    let quoteSent = false;
+
+    if (body.is_additional_purchase && order.customer_id) {
+      const { data: customer } = await admin!.from("customers").select("full_name,phone,address,sector").eq("id", order.customer_id).maybeSingle();
+      const subtotal = (unitPrice ?? 0) * quantity;
+      const quoteNumber = `CT-${Date.now().toString().slice(-8)}`;
+      const customerAddress = [customer?.address, customer?.sector].filter(Boolean).join(", ");
+
+      const { data: quote } = await admin!.from("quotes").insert({
+        quote_number: quoteNumber,
+        customer_id: order.customer_id,
+        work_order_id: order.id,
+        status: "draft",
+        subtotal,
+        tax: 0,
+        total: subtotal,
+        customer_name_snapshot: customer?.full_name ?? null,
+        customer_phone_snapshot: customer?.phone ?? null,
+        customer_address_snapshot: customerAddress || null,
+        warranty_note: "La garantía aplica según el producto y las condiciones indicadas en esta cotización.",
+        notes: "Compra adicional reportada por el técnico durante la visita.",
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      }).select("id,public_token,quote_number,total").single();
+
+      if (quote) {
+        quoteId = quote.id;
+        await admin!.from("quote_items").insert({
+          quote_id: quote.id,
+          product_id: body.product_id ?? null,
+          description: body.product_name,
+          quantity,
+          unit_price: unitPrice ?? 0,
+          discount_pct: 0,
+          discount_amount: 0,
+          line_total: subtotal,
+        });
+
+        if (customer?.phone) {
+          const digits = customer.phone.replace(/\D/g, "");
+          const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+          const e164 = /^(809|829|849)\d{7}$/.test(local) ? `+1${local}` : null;
+          if (e164) {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+            const previewUrl = `${appUrl}/cotizacion/${quote.public_token}`;
+            const message =
+              `Hola ${customer.full_name ?? ""}, durante la visita técnica de la orden ${order.order_number} se agregó una compra adicional:\n\n` +
+              `${body.product_name} × ${quantity} — RD$${subtotal.toLocaleString("es-DO")}\n\n` +
+              `Puedes ver y confirmar la cotización aquí: ${previewUrl}`;
+            const result = await sendWhatsAppMessage(e164, message);
+            if (result.ok) {
+              quoteSent = true;
+              await admin!.from("quotes").update({ sent_at: new Date().toISOString(), sent_channel: "whatsapp", status: "sent" }).eq("id", quote.id);
+            }
+          }
+        }
+      }
+    }
+
     const { error } = await admin!.from("work_order_materials").insert({
       organization_id: DEFAULT_ORG_ID,
       work_order_id: order.id,
       product_id: body.product_id ?? null,
       product_name: body.product_name,
-      quantity: body.quantity ?? 1,
-      unit_price: body.unit_price ?? null,
+      quantity,
+      unit_price: unitPrice,
+      is_additional_purchase: Boolean(body.is_additional_purchase),
+      quote_id: quoteId,
       recorded_by: userId,
     });
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, quote_created: Boolean(quoteId), quote_sent: quoteSent });
   }
 
   const now = new Date().toISOString();

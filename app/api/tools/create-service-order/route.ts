@@ -104,12 +104,6 @@ function isPlaceholder(value: string) {
   ].includes(normalized);
 }
 
-function orderNumber() {
-  const stamp = Date.now().toString().slice(-6);
-  const random = Math.floor(Math.random() * 900 + 100);
-  return `OT-${stamp}${random}`;
-}
-
 function questionFor(field: MissingField) {
   const questions: Record<MissingField, string> = {
     customer_name: "¿A nombre de quién deseas registrar la visita?",
@@ -311,11 +305,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: appointmentError.message }, { status: 500 });
   }
 
-  const number = orderNumber();
+  const { data: numberResult, error: numberError } = await supabase.rpc("next_order_number");
+  if (numberError || !numberResult) {
+    return NextResponse.json({ ok: false, error: numberError?.message || "No se pudo generar el número de orden." }, { status: 500 });
+  }
+  const number = numberResult as string;
   const { data: workOrder, error: orderError } = await supabase
     .from("work_orders")
     .insert({
       order_number: number,
+      order_type: "reparacion_instalacion",
       customer_id: customer.id,
       appointment_id: appointment.id,
       technician_id: null,

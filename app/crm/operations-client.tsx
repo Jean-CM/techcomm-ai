@@ -14,7 +14,7 @@ type Customer = { id:string; full_name?:string|null; phone:string; email?:string
 type Product = { id:string; sku?:string|null; name:string; piece_name?:string|null; description?:string|null; item_type?:string|null; category?:string|null; brand?:string|null; model?:string|null; unit_cost?:number|null; sale_price?:number|null; price?:number|null; max_discount_pct?:number|null; minimum_authorized_price?:number|null; installation_price?:number|null; delivery_price?:number|null; installation_includes_delivery?:boolean|null; stock:number; reserved_stock:number; active?:boolean };
 type Technician = { id:string; full_name:string; phone?:string|null; specialties?:string[]|null; zones?:string[]|null; status:string; whatsapp_enabled?:boolean };
 type Appointment = { id:string; customer_id?:string|null; technician_id?:string|null; starts_at:string; ends_at?:string|null; address?:string|null; status:string; confirmation_status?:string|null; technician_confirmation_status?:string|null; requires_manual_assignment?:boolean; notes?:string|null; created_at?:string; updated_at?:string };
-type WorkOrder = { id:string; order_number:string; customer_id?:string|null; appointment_id?:string|null; technician_id?:string|null; equipment?:string|null; brand?:string|null; model?:string|null; issue?:string|null; status:string; priority?:string|null; source?:string|null; created_at?:string; updated_at?:string };
+type WorkOrder = { id:string; order_number:string; order_type?:string|null; customer_id?:string|null; appointment_id?:string|null; technician_id?:string|null; equipment?:string|null; brand?:string|null; model?:string|null; issue?:string|null; status:string; priority?:string|null; source?:string|null; created_at?:string; updated_at?:string };
 type Quote = { id:string; quote_number:string; customer_id?:string|null; status:string; total?:number|null; created_at?:string };
 type Sale = { id:string; customer_id?:string|null; quantity:number; unit_price:number; status:string; created_at?:string };
 type CallEvent = { id:string; conversation_id:string; customer_phone?:string|null; status?:string|null; summary?:string|null; transcript?:unknown; analysis?:unknown; metadata?:Record<string,unknown>|null; created_at:string };
@@ -41,7 +41,7 @@ const ROLE_META: Record<Role,{label:string;description:string;menus:string[];per
   admin:{ label:"Administrador", description:"Administración operativa completa sin configuración sensible.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial"] },
   secretary:{ label:"Secretaría", description:"Atención de clientes, agenda, reprogramaciones y gestiones presenciales.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Cotizaciones"], permissions:["edit_customer","reschedule","manual_management"] },
   supervisor:{ label:"Supervisor técnico", description:"Citas, técnicos, órdenes, pendientes y reasignaciones.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos"], permissions:["edit_technician","reschedule","reassign","update_order"] },
-  technician:{ label:"Técnico (vista previa)", description:"Así se ve la operación desde el punto de vista de un técnico — sus visitas, órdenes y estado de campo. Los técnicos reales usan su propio portal en /tecnico, no el CRM.", menus:["Dashboard","Agenda y Órdenes","Técnicos"], permissions:[] },
+  technician:{ label:"Técnico (vista previa)", description:"Así se ve la operación desde el punto de vista de un técnico — solo su agenda y sus órdenes. Los técnicos reales usan su propio portal en /tecnico, no el CRM.", menus:["Dashboard","Agenda y Órdenes"], permissions:[] },
 };
 
 const STATUS_LABELS: Record<string,string> = {
@@ -68,6 +68,7 @@ export default function OperationsClient(){
   const [search,setSearch]=useState("");
   const [statusFilter,setStatusFilter]=useState("all");
   const [secondaryFilter,setSecondaryFilter]=useState("all");
+  const [orderTypeFilter,setOrderTypeFilter]=useState("all");
   const [dateFilter,setDateFilter]=useState("");
 
   const load=useCallback(async()=>{
@@ -97,7 +98,7 @@ export default function OperationsClient(){
     };
   },[]);
   useEffect(()=>{ if(!ROLE_META[role].menus.includes(active))setActive(ROLE_META[role].menus[0]); },[role,active]);
-  useEffect(()=>{ setSearch("");setStatusFilter("all");setSecondaryFilter("all");setDateFilter(""); },[active]);
+  useEffect(()=>{ setSearch("");setStatusFilter("all");setSecondaryFilter("all");setDateFilter("");setOrderTypeFilter("all"); },[active]);
 
   const can=(permission:Permission)=>ROLE_META[role].permissions.includes(permission);
   const customersById=useMemo(()=>new Map(data.customers.map(item=>[item.id,item])),[data.customers]);
@@ -136,8 +137,8 @@ export default function OperationsClient(){
     const appt=appointmentsById.get(item.appointment_id||"");
     const haystack=[item.order_number,customer?.full_name,item.equipment,item.brand,item.model,item.issue,tech?.full_name,appt?.address,customer?.address].filter(Boolean).join(" ").toLowerCase();
     const sameDate=!dateFilter||(appt?.starts_at?appt.starts_at.slice(0,10)===dateFilter:false);
-    return (!search||haystack.includes(search.toLowerCase()))&&(statusFilter==="all"||item.status===statusFilter)&&(secondaryFilter==="all"||String(item.technician_id||"unassigned")===secondaryFilter)&&sameDate;
-  }),[data.work_orders,customersById,techniciansById,appointmentsById,search,statusFilter,secondaryFilter,dateFilter]);
+    return (!search||haystack.includes(search.toLowerCase()))&&(statusFilter==="all"||item.status===statusFilter)&&(secondaryFilter==="all"||String(item.technician_id||"unassigned")===secondaryFilter)&&(orderTypeFilter==="all"||(item.order_type||"reparacion_instalacion")===orderTypeFilter)&&sameDate;
+  }),[data.work_orders,customersById,techniciansById,appointmentsById,search,statusFilter,secondaryFilter,orderTypeFilter,dateFilter]);
 
   const products=useMemo(()=>data.products.filter(item=>{
     const haystack=[item.sku,item.name,item.piece_name,item.description,item.category,item.brand,item.model].filter(Boolean).join(" ").toLowerCase();
@@ -241,7 +242,7 @@ export default function OperationsClient(){
 
       {!loading&&active==="Agenda y Órdenes"&&<section className={`${styles.card} ${styles.compactAgenda}`}>
         <div className={styles.cardHead}><div><span className={styles.eyebrow}>OPERACIÓN DE CAMPO</span><h3>Agenda y órdenes</h3><p className={styles.summary}>Cada visita programada con su orden de trabajo — horario, cliente, equipo, falla y técnico en una sola vista.</p></div><span className={styles.badge}>{orders.length} órdenes</span></div>
-        <div className={styles.filters}><input className={styles.input} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar orden, cliente, equipo, falla o dirección..."/><input className={styles.select} type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)}/><select className={styles.select} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">Todos los estados</option>{["new","scheduled","assigned","in_progress","pending_customer","approved","on_hold","completed","cancelled"].map(value=><option key={value} value={value}>{statusLabel(value)}</option>)}</select><select className={styles.select} value={secondaryFilter} onChange={e=>setSecondaryFilter(e.target.value)}><option value="all">Todos los técnicos</option><option value="unassigned">Sin técnico</option>{data.technicians.map(item=><option key={item.id} value={item.id}>{item.full_name}</option>)}</select></div>
+        <div className={styles.filters}><input className={styles.input} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar orden, cliente, equipo, falla o dirección..."/><input className={styles.select} type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)}/><select className={styles.select} value={orderTypeFilter} onChange={e=>setOrderTypeFilter(e.target.value)}><option value="all">Reparación y venta</option><option value="reparacion_instalacion">Reparación / instalación</option><option value="venta_producto">Venta de producto</option></select><select className={styles.select} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">Todos los estados</option>{["new","scheduled","assigned","in_progress","pending_customer","approved","on_hold","completed","cancelled"].map(value=><option key={value} value={value}>{statusLabel(value)}</option>)}</select><select className={styles.select} value={secondaryFilter} onChange={e=>setSecondaryFilter(e.target.value)}><option value="all">Todos los técnicos</option><option value="unassigned">Sin técnico</option>{data.technicians.map(item=><option key={item.id} value={item.id}>{item.full_name}</option>)}</select></div>
         <div className={styles.tableWrap}><div className={styles.table}><div className={`${styles.headRow} ${styles.colsAgendaOrders}`}><span>Orden</span><span>Fecha y hora</span><span>Cliente</span><span>Equipo / falla</span><span>Dirección</span><span>Técnico</span><span>Estado</span><span>Acciones</span></div>{orders.map(item=>{const customer=customersById.get(item.customer_id||"");const appt=appointmentsById.get(item.appointment_id||"");return <div className={`${styles.row} ${styles.colsAgendaOrders}`} key={item.id}><strong>{item.order_number}</strong><span>{appt?localDate(appt.starts_at):"Sin cita"}</span><div><strong>{customer?.full_name||"Sin nombre"}</strong><p>{customer?.phone||"Sin teléfono"}</p></div><div><span>{item.equipment||"Equipo"}</span><p>{item.issue||[item.brand,item.model].filter(Boolean).join(" · ")||"Sin detalle"}</p></div><span>{appt?.address||customer?.address||"Sin dirección"}</span><span>{techniciansById.get(item.technician_id||"")?.full_name||"Sin técnico"}</span><span className={badgeClass(item.status)}>{statusLabel(item.status)}</span><div className={styles.actions}>{can("update_order")&&actionButton("Gestionar",()=>setModal({kind:"order",item}))}{appt&&can("reschedule")&&actionButton("Cita",()=>setModal({kind:"appointment",item:appt}))}</div></div>})}</div></div>
       </section>}
 

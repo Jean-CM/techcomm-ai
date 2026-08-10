@@ -23,6 +23,8 @@ export default function TechnicianOrderView({ orderId }: { orderId: string }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Product[]>([]);
   const [quantity, setQuantity] = useState(1);
+  const [isAdditionalPurchase, setIsAdditionalPurchase] = useState(false);
+  const [quoteFeedback, setQuoteFeedback] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -66,14 +68,22 @@ export default function TechnicianOrderView({ orderId }: { orderId: string }) {
   }
 
   async function addMaterial(product: Product) {
-    await fetch(`/api/tecnico/ordenes/${orderId}`, {
+    setQuoteFeedback(null);
+    const response = await fetch(`/api/tecnico/ordenes/${orderId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add_material", product_id: product.id, product_name: product.name, quantity, unit_price: product.price }),
+      body: JSON.stringify({ action: "add_material", product_id: product.id, product_name: product.name, quantity, unit_price: product.price, is_additional_purchase: isAdditionalPurchase }),
     });
+    const payload = await response.json().catch(() => ({}));
+    if (isAdditionalPurchase) {
+      if (payload.quote_sent) setQuoteFeedback("Cotización creada y enviada al cliente por WhatsApp.");
+      else if (payload.quote_created) setQuoteFeedback("Cotización creada, pero no se pudo enviar por WhatsApp (verifica el teléfono del cliente).");
+      else setQuoteFeedback("No se pudo generar la cotización — revisa con la oficina.");
+    }
     setQuery("");
     setResults([]);
     setQuantity(1);
+    setIsAdditionalPurchase(false);
     await load();
   }
 
@@ -124,6 +134,10 @@ export default function TechnicianOrderView({ orderId }: { orderId: string }) {
               placeholder="Buscar producto o pieza..."
               style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #2C333D", background: "#0F1318", color: "#F2EEE6", marginBottom: 8 }}
             />
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 14, color: "#E3B341" }}>
+              <input type="checkbox" checked={isAdditionalPurchase} onChange={(e) => setIsAdditionalPurchase(e.target.checked)} />
+              Es una compra adicional — no estaba en la orden original (genera y envía cotización al cliente)
+            </label>
             {results.length > 0 && (
               <div>
                 {results.map((p) => (
@@ -137,6 +151,7 @@ export default function TechnicianOrderView({ orderId }: { orderId: string }) {
                 ))}
               </div>
             )}
+            {quoteFeedback && <p style={{ color: "#4CC38A", fontSize: 13, marginTop: 8 }}>{quoteFeedback}</p>}
             {materials.length > 0 && (
               <div style={{ marginTop: 12 }}>
                 <p style={{ margin: "0 0 6px", color: "#9BA1A6", fontSize: 13 }}>Agregado a esta orden:</p>
