@@ -9,7 +9,23 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function stringValue(value: unknown) {
-  return typeof value === "string" && value.trim() ? value : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function nestedString(record: Record<string, unknown>, key: string) {
+  const direct = stringValue(record[key]);
+  if (direct) return direct;
+  const nested = asRecord(record[key]);
+  return stringValue(nested.value) ?? stringValue(nested.text) ?? null;
+}
+
+function normalizeMotive(value: string | null) {
+  if (!value) return null;
+  return value
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^./, (char) => char.toUpperCase());
 }
 
 async function requireOwnerOrAdmin() {
@@ -64,8 +80,8 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .limit(200);
 
-  if (dateFrom) eventsQuery = eventsQuery.gte("created_at", dateFrom);
-  if (dateTo) eventsQuery = eventsQuery.lte("created_at", dateTo);
+  if (dateFrom) eventsQuery = eventsQuery.gte("created_at", `${dateFrom}T00:00:00`);
+  if (dateTo) eventsQuery = eventsQuery.lte("created_at", `${dateTo}T23:59:59.999`);
   if (phone) eventsQuery = eventsQuery.ilike("customer_phone", `%${phone}%`);
   if (phoneFilter) eventsQuery = eventsQuery.in("customer_phone", phoneFilter);
 
@@ -90,10 +106,16 @@ export async function GET(request: Request) {
   const results = (events ?? []).map((e) => {
     const metadata = asRecord(e.metadata);
     const analysis = asRecord(e.analysis);
+    const collected = asRecord(analysis.data_collection_results);
     const sentimentRaw = analysis.sentiment_analysis;
     const sentimentRecord = asRecord(sentimentRaw);
-    const duration = Number(metadata.call_duration_secs ?? 0);
+    const duration = Number(metadata.call_duration_secs ?? metadata.duration_secs ?? 0);
     const successScore = Number(analysis.call_success_score ?? 0);
+    const motive = normalizeMotive(
+      nestedString(collected, "intent")
+      ?? stringValue(metadata.intent)
+      ?? nestedString(collected, "conversation_outcome")
+    );
 
     return {
       id: e.id,
@@ -102,6 +124,7 @@ export async function GET(request: Request) {
       customer_name: e.customer_phone ? byPhone.get(e.customer_phone)?.full_name ?? null : null,
       national_id: e.customer_phone ? byPhone.get(e.customer_phone)?.national_id ?? null : null,
       status: e.status,
+      motive,
       summary: e.summary,
       order_number: e.order_id ? byOrderId.get(e.order_id) ?? null : null,
       duration_seconds: Number.isFinite(duration) ? duration : 0,
