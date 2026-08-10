@@ -1,39 +1,65 @@
 :root {
   color-scheme: dark;
-  /* Grounded in the trade: graphite like a workshop counter, signal-orange like
-     a soldering iron's heat and a technician's hi-vis vest. Refined into a
-     calmer, denser enterprise palette for Techcomm Operations. */
-  --bg: #0e1116;
-  --bg-2: #0a0d11;
-  --panel: #161b22;
-  --panel-2: #1c232c;
-  --panel-3: #212a34;
-  --surface-input: #0f141a;
-  --text: #eceef1;
-  --text-soft: #c4c9d1;
-  --muted: #878e99;
-  --muted-2: #626a75;
+  /* Original public-site identity (landing, login, technician portal).
+     Left intentionally unchanged so the redesign of the operations app does
+     not recolor unrelated public pages. */
+  --bg: #14181d;
+  --panel: #1c2129;
+  --panel-2: #242a33;
+  --text: #f2eee6;
+  --muted: #9ba1a6;
   --accent: #ff6a39;
-  --accent-soft: rgba(255, 106, 57, 0.12);
   --accent-2: #e3b341;
-  --good: #3fb27f;
-  --good-soft: rgba(63, 178, 127, 0.14);
+  --good: #4cc38a;
   --success: var(--good);
-  --warning: #e0a53a;
-  --warning-soft: rgba(224, 165, 58, 0.14);
-  --bad: #e5555f;
-  --bad-soft: rgba(229, 85, 95, 0.14);
-  --info: #4c9ce0;
-  --info-soft: rgba(76, 156, 224, 0.14);
-  --border: #232a34;
-  --border-strong: #313a47;
+  --bad: #e8646a;
+  --border: #2c333d;
+}
+
+/* ==========================================================================
+   TECHCOMM OPERATIONS — corporate theme scope.
+   Derived from the official Techcomm Wireless logo: functional blue/cyan as
+   the primary brand color, corporate red as the critical/semantic accent,
+   graphite/near-black foundation. Applied only to the operations application
+   shell (CRM, audit, admin, system health) via the `.tcTheme` class so the
+   public site keeps its own identity.
+   ========================================================================== */
+.tcTheme {
+  color-scheme: dark;
+  --bg: #0b0f14;
+  --bg-2: #0d131a;
+  --panel: #131b24;
+  --panel-2: #18232e;
+  --panel-3: #1f2c39;
+  --surface-input: #0e151d;
+  --text: #f5f7fa;
+  --text-soft: #c4cdd7;
+  --muted: #9ba8b5;
+  --muted-2: #6a7885;
+  --accent: #0090d4;
+  --accent-hover: #10a5e8;
+  --accent-soft: rgba(0, 144, 212, 0.12);
+  --accent-2: #38a9e0;
+  --good: #35c986;
+  --good-soft: rgba(53, 201, 134, 0.14);
+  --success: var(--good);
+  --warning: #e8b84d;
+  --warning-soft: rgba(232, 184, 77, 0.14);
+  --bad: #ff010b;
+  --bad-soft: rgba(255, 1, 11, 0.12);
+  --info: #38a9e0;
+  --info-soft: rgba(56, 169, 224, 0.14);
+  --border: #263441;
+  --border-strong: #33475a;
   --radius: 10px;
   --radius-sm: 7px;
   --radius-lg: 14px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
-  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.42);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.46);
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  background: var(--bg);
+  color: var(--text);
 }
 
 /* next/font injects --font-display, --font-body and --font-mono directly on
@@ -246,8 +272,8 @@ h2 { font-size: clamp(30px, 4.6vw, 50px); line-height: 1.05; margin-bottom: 18px
 .tc-pagehead-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* Buttons ---------------------------------------------------------------- */
-.tc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: var(--radius-sm); border: 1px solid transparent; background: var(--accent); color: #1a0f08; font-weight: 600; font-size: 14px; font-family: var(--font-body); cursor: pointer; transition: filter .14s var(--ease), background .14s var(--ease), border-color .14s var(--ease); white-space: nowrap; }
-.tc-btn:hover { filter: brightness(1.07); }
+.tc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: var(--radius-sm); border: 1px solid transparent; background: var(--accent); color: #ffffff; font-weight: 600; font-size: 14px; font-family: var(--font-body); cursor: pointer; transition: filter .14s var(--ease), background .14s var(--ease), border-color .14s var(--ease); white-space: nowrap; }
+.tc-btn:hover { background: var(--accent-hover); }
 .tc-btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
 .tc-btn svg { width: 16px; height: 16px; }
 .tc-btn-secondary { background: var(--panel-2); color: var(--text); border-color: var(--border-strong); }
@@ -364,7 +390,7 @@ h2 { font-size: clamp(30px, 4.6vw, 50px); line-height: 1.05; margin-bottom: 18px
 
 /* Audio player ----------------------------------------------------------- */
 .tc-audio { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-input); }
-.tc-audio-btn { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--accent); color: #1a0f08; cursor: pointer; flex-shrink: 0; transition: filter .14s var(--ease); }
+.tc-audio-btn { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--accent); color: #ffffff; cursor: pointer; flex-shrink: 0; transition: filter .14s var(--ease); }
 .tc-audio-btn:hover { filter: brightness(1.08); }
 .tc-audio-btn:disabled { opacity: .55; cursor: wait; }
 .tc-audio-btn svg { width: 18px; height: 18px; }

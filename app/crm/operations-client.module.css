@@ -8,11 +8,27 @@
 .sidebar { position: sticky; top: 0; height: 100vh; flex-shrink: 0; width: 248px; display: flex; flex-direction: column; background: var(--bg-2); border-right: 1px solid var(--border); transition: width .2s var(--ease); z-index: 40; }
 .sidebar.collapsed { width: 68px; }
 
-.brand { display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 16px; border-bottom: 1px solid var(--border); }
-.brandMark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, var(--accent), #ff9061); color: #1a0f08; font-weight: 800; font-size: 15px; flex-shrink: 0; }
-.brandText { display: flex; flex-direction: column; line-height: 1.15; overflow: hidden; }
+.brand { display: flex; align-items: center; gap: 11px; height: 60px; padding: 0 14px; border-bottom: 1px solid var(--border); }
+/* The supplied corporate logo has a light background, so it sits inside a
+   clean neutral/light chip rather than being recolored. */
+.logoChip { display: grid; place-items: center; height: 38px; min-width: 38px; padding: 5px 8px; border-radius: 9px; background: #f4f7fa; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); flex-shrink: 0; overflow: hidden; }
+.logoChip img { display: block; height: 26px; width: auto; max-width: 128px; object-fit: contain; }
+.logoFallback { display: flex; align-items: baseline; gap: 3px; font-weight: 800; font-size: 15px; letter-spacing: -.02em; color: #0090d4; }
+.logoFallback b { color: #ff010b; font-weight: 800; }
+.brandText { display: flex; flex-direction: column; line-height: 1.2; overflow: hidden; }
 .brandText strong { font-size: 13.5px; letter-spacing: -.01em; white-space: nowrap; }
-.brandText span { font-size: 10.5px; color: var(--muted); font-family: var(--font-mono); white-space: nowrap; }
+.brandText span { font-size: 10px; color: var(--muted); font-family: var(--font-mono); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+
+/* Profile (demo presentation) selector inside the sidebar */
+.profile { margin: 10px 10px 2px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); display: grid; gap: 7px; }
+.profile small { color: var(--muted-2); font-size: 9.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+.profile p { margin: 2px 0 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.collapsed .profile { display: none; }
+
+/* Collapse / mobile buttons in the topbar */
+.iconToggle { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; flex-shrink: 0; transition: color .14s var(--ease), border-color .14s var(--ease); }
+.iconToggle:hover { color: var(--text); border-color: var(--border-strong); }
+.iconToggle svg { width: 18px; height: 18px; }
 
 .navScroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 10px 10px 6px; display: flex; flex-direction: column; }
 .navGroup { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
@@ -63,7 +79,11 @@
 .transcript { display: flex; flex-direction: column; gap: 9px; }
 .bubble { border: 1px solid var(--border); background: var(--panel-2); border-radius: 10px; padding: 11px 13px; font-size: 13.5px; line-height: 1.5; color: var(--text-soft); }
 .bubble small { display: block; color: var(--muted); margin-bottom: 5px; font-size: 11px; font-weight: 600; }
-.bubbleUser { background: var(--accent-soft); border-color: rgba(255, 106, 57, .28); }
+.bubbleUser { background: var(--accent-soft); border-color: rgba(0, 144, 212, .3); }
+
+/* External nav links (CONTROL group → other routes) reuse navItem styling */
+.navLink { text-decoration: none; }
+.navGroup .navItem[data-critical="true"] { color: var(--muted); }
 
 .timeline { display: grid; gap: 4px; }
 .timelineItem { display: grid; grid-template-columns: 130px 1fr; gap: 12px; padding: 10px 0 10px 14px; border-left: 2px solid var(--accent); }

@@ -7,6 +7,34 @@ import { X, Inbox, Play, Pause, Loader2 } from "lucide-react";
 /* Status chip                                                         */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Corporate logo — official Techcomm Wireless asset on a light chip.   */
+/* Drop the real file at /public/brand/techcomm-logo.png (or .svg) and  */
+/* it is used as-is; until then a clean wordmark stands in.             */
+/* ------------------------------------------------------------------ */
+
+export function LogoMark({
+  chipClass,
+  fallback,
+  imgAlt = "Techcomm Wireless",
+}: {
+  chipClass: string;
+  fallback: ReactNode;
+  imgAlt?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className={chipClass}>
+      {failed ? (
+        fallback
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src="/brand/techcomm-logo.png" alt={imgAlt} onError={() => setFailed(true)} />
+      )}
+    </span>
+  );
+}
+
 export type Tone = "good" | "warning" | "bad" | "info" | "accent" | "neutral";
 
 export function StatusBadge({
