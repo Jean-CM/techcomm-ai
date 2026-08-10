@@ -4,13 +4,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X, Inbox, Play, Pause, Loader2 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
-/* Status chip                                                         */
-/* ------------------------------------------------------------------ */
-
-/* ------------------------------------------------------------------ */
-/* Corporate logo — official Techcomm Wireless asset on a light chip.   */
-/* Drop the real file at /public/brand/techcomm-logo.png (or .svg) and  */
-/* it is used as-is; until then a clean wordmark stands in.             */
+/* Corporate logo — exact Techcomm Wireless asset provided by the user. */
+/* The SVG contains the supplied corporate image as an embedded bitmap, */
+/* preserving the visual identity without redrawing or recoloring it.   */
 /* ------------------------------------------------------------------ */
 
 export function LogoMark({
@@ -29,7 +25,7 @@ export function LogoMark({
         fallback
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src="/brand/techcomm-logo.png" alt={imgAlt} onError={() => setFailed(true)} />
+        <img src="/brand/techcomm-logo.svg" alt={imgAlt} onError={() => setFailed(true)} />
       )}
     </span>
   );
@@ -50,10 +46,6 @@ export function StatusBadge({
     <span className={`tc-chip is-${tone}${plain ? " tc-chip-plain" : ""}`}>{children}</span>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* KPI / metric card                                                   */
-/* ------------------------------------------------------------------ */
 
 export function Kpi({
   label,
@@ -90,10 +82,6 @@ export function Kpi({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Empty state                                                         */
-/* ------------------------------------------------------------------ */
-
 export function EmptyState({
   title,
   message,
@@ -112,10 +100,6 @@ export function EmptyState({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Table skeleton                                                      */
-/* ------------------------------------------------------------------ */
-
 export function TableSkeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
   return (
     <div style={{ display: "grid", gap: 10, padding: 18 }}>
@@ -129,10 +113,6 @@ export function TableSkeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: nu
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* Overlay hook — Escape + scroll lock                                 */
-/* ------------------------------------------------------------------ */
 
 function useOverlay(open: boolean, onClose: () => void) {
   useEffect(() => {
@@ -149,10 +129,6 @@ function useOverlay(open: boolean, onClose: () => void) {
     };
   }, [open, onClose]);
 }
-
-/* ------------------------------------------------------------------ */
-/* Right-side detail drawer                                            */
-/* ------------------------------------------------------------------ */
 
 export function Drawer({
   open,
@@ -195,10 +171,6 @@ export function Drawer({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Focused modal (small edits)                                         */
-/* ------------------------------------------------------------------ */
-
 export function Modal({
   open,
   onClose,
@@ -231,10 +203,6 @@ export function Modal({
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* Premium audio player — plays a signed URL, requested on demand      */
-/* ------------------------------------------------------------------ */
 
 function fmt(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
