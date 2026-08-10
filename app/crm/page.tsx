@@ -1,4 +1,3 @@
-import Link from "next/link";
 import OperationsClient from "./operations-client";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -29,32 +28,5 @@ export default async function CrmPage() {
     canOpenAudit = false;
   }
 
-  return (
-    <>
-      <OperationsClient />
-      {canOpenAudit && (
-        <Link
-          href="/admin/auditoria"
-          style={{
-            position: "fixed",
-            right: 22,
-            bottom: 22,
-            zIndex: 120,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            borderRadius: 999,
-            padding: "12px 18px",
-            background: "#FF6A39",
-            color: "#181109",
-            fontWeight: 800,
-            textDecoration: "none",
-            boxShadow: "0 12px 34px rgba(0,0,0,.34)",
-          }}
-        >
-          ◉ Auditoría de llamadas
-        </Link>
-      )}
-    </>
-  );
+  return <OperationsClient canOpenAudit={canOpenAudit} />;
 }
