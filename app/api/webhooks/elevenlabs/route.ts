@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 const ELEVENLABS_COST_PER_MINUTE = 0.10; // Creator plan published rate
 const TWILIO_COST_PER_MINUTE_LOCAL = 0.1155; // Dominican Republic, landline
 const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
+const WEBHOOK_SIGNATURE_TOLERANCE_SECONDS = 5 * 60;
 
 type JsonObject = Record<string, unknown>;
 type ElevenLabsWebhookEvent = { type?: string; event_timestamp?: number; data?: JsonObject };
@@ -66,20 +67,28 @@ function transcriptContent(item: TranscriptItem) {
 }
 
 function verifySignature(rawBody: string, header: string | null, secret: string | undefined) {
-  if (!secret) return true;
-  if (!header) return false;
+  // Fail closed: a missing secret is a configuration error, never an open webhook.
+  if (!secret || !header) return false;
+
   const parts = Object.fromEntries(
     header.split(",").map((part) => {
       const [key, ...value] = part.trim().split("=");
       return [key, value.join("=")];
     }),
   );
-  const timestamp = parts.t;
+
+  const timestamp = Number(parts.t);
   const provided = parts.v0 ?? parts.v1;
-  if (!timestamp || !provided) return false;
-  const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  if (!Number.isFinite(timestamp) || !provided) return false;
+
+  // ElevenLabs signs the timestamp together with the raw body. Reject stale
+  // deliveries so a captured valid request cannot be replayed indefinitely.
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestamp) > WEBHOOK_SIGNATURE_TOLERANCE_SECONDS) return false;
+
+  const expected = createHmac("sha256", secret).update(`${parts.t}.${rawBody}`).digest("hex");
   try {
-    return timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
+    return timingSafeEqual(Buffer.from(expected, "utf8"), Buffer.from(provided, "utf8"));
   } catch {
     return false;
   }
