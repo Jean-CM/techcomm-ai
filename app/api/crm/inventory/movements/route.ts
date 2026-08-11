@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
-const WRITE_ROLES = new Set(["owner", "admin", "manager", "analyst", "agent"]);
+const WRITE_ROLES = new Set(["owner", "admin", "manager"]);
 const MOVEMENT_TYPES = new Set(["receipt", "issue", "reserve", "release", "return", "transfer_in", "transfer_out", "pending_add", "pending_receive", "pending_cancel"]);
 
 async function requireWriter() {
