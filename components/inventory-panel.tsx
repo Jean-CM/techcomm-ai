@@ -6,16 +6,21 @@ import {
   Boxes,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   Database,
   FileSpreadsheet,
+  KeyRound,
   Loader2,
   Package,
   PackageCheck,
   PackageMinus,
   PackagePlus,
+  PauseCircle,
+  PlayCircle,
   RefreshCw,
   Search,
   Settings2,
+  ShieldCheck,
   Warehouse,
 } from "lucide-react";
 import { EmptyState, Kpi, Modal, StatusBadge, TableSkeleton, type Tone } from "@/components/tc-ui";
@@ -78,10 +83,13 @@ type Source = {
   connection_mode: string;
   status: string;
   description?: string | null;
+  config?: Record<string, unknown> | null;
   last_sync_at?: string | null;
+  credential_reference_set?: boolean;
+  secret_configured?: boolean;
+  location_configured?: boolean;
+  configuration_ready?: boolean;
 };
-
-type MovementType = "receipt" | "issue" | "reserve" | "release" | "pending_add" | "pending_receive" | "pending_cancel" | "return" | "transfer_in" | "transfer_out";
 
 const EMPTY_SUMMARY: InventorySummary = {
   total_items: 0,
@@ -110,6 +118,15 @@ function stockLabel(value: InventoryProduct["inventory_status"]) {
 function stockTone(value: InventoryProduct["inventory_status"]): Tone {
   return value === "out" ? "bad" : value === "low" ? "warning" : value === "inactive" ? "neutral" : "good";
 }
+function sourceStatusLabel(value: string) {
+  return value === "active" ? "Activa" : value === "paused" ? "Pausada" : value === "error" ? "Error" : value === "disabled" ? "Deshabilitada" : "Borrador";
+}
+function sourceStatusTone(value: string): Tone {
+  return value === "active" ? "good" : value === "error" ? "bad" : value === "paused" ? "warning" : "neutral";
+}
+function sourceTypeLabel(value: string) {
+  return value === "sql_server" ? "SQL Server" : value === "postgresql" ? "PostgreSQL" : value === "mysql" ? "MySQL" : value === "oracle" ? "Oracle" : value === "api" ? "API" : value === "sftp" ? "SFTP" : value === "sharepoint" ? "SharePoint" : value === "onedrive" ? "OneDrive" : value === "excel_csv" ? "Excel/CSV" : value === "power_bi" ? "Power BI" : "Otro";
+}
 
 export default function InventoryPanel({ canEdit = false }: { canEdit?: boolean }) {
   const [payload, setPayload] = useState<InventoryPayload>({ ok: true, products: [], summary: EMPTY_SUMMARY, facets: { categories: [], brands: [] }, pagination: { page: 1, pageSize: 50, total: 0, pages: 1 } });
@@ -129,6 +146,7 @@ export default function InventoryPanel({ canEdit = false }: { canEdit?: boolean 
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [sources, setSources] = useState<Source[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(false);
+  const [sourceActionId, setSourceActionId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -218,8 +236,8 @@ export default function InventoryPanel({ canEdit = false }: { canEdit?: boolean 
     await load();
   }
 
-  async function openSources() {
-    setSourcesOpen(true); setSourcesLoading(true);
+  async function refreshSources() {
+    setSourcesLoading(true);
     try {
       const response = await fetch("/api/crm/inventory/connections", { cache: "no-store" });
       const data = await response.json();
@@ -227,6 +245,11 @@ export default function InventoryPanel({ canEdit = false }: { canEdit?: boolean 
       setSources(data.sources || []);
     } catch (error) { setFeedback(error instanceof Error ? error.message : "No fue posible cargar fuentes."); }
     finally { setSourcesLoading(false); }
+  }
+
+  async function openSources() {
+    setSourcesOpen(true);
+    await refreshSources();
   }
 
   async function createSource(event: FormEvent<HTMLFormElement>) {
@@ -241,13 +264,32 @@ export default function InventoryPanel({ canEdit = false }: { canEdit?: boolean 
     };
     const response = await fetch("/api/crm/inventory/connections", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: form.get("name"), source_type: form.get("source_type"), connection_mode: form.get("connection_mode"), description: form.get("description"), secret_ref: form.get("secret_ref"), config }),
+      body: JSON.stringify({ name: form.get("name"), source_type: form.get("source_type"), connection_mode: form.get("connection_mode"), schedule: form.get("schedule"), description: form.get("description"), secret_ref: form.get("secret_ref"), config }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { setFeedback(data.error || "No fue posible registrar la fuente."); return; }
-    setSources((current) => [data.source, ...current]);
     event.currentTarget.reset();
-    setFeedback("Fuente registrada. Las credenciales permanecen fuera del catálogo de conexiones.");
+    setFeedback("Fuente registrada como borrador. Valídala y actívala solo después de configurar el secreto fuera del CRM.");
+    await refreshSources();
+  }
+
+  async function sourceAction(source: Source, action: "validate" | "activate" | "pause" | "disable") {
+    setSourceActionId(source.id);
+    try {
+      const response = await fetch("/api/crm/inventory/connections", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: source.id, action }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "No fue posible actualizar la fuente.");
+      setFeedback(data.message || (action === "validate" ? "Validación completada." : `Fuente ${action === "activate" ? "activada" : action === "pause" ? "pausada" : "deshabilitada"}.`));
+      await refreshSources();
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "No fue posible actualizar la fuente.");
+    } finally {
+      setSourceActionId(null);
+    }
   }
 
   return (
@@ -347,23 +389,41 @@ export default function InventoryPanel({ canEdit = false }: { canEdit?: boolean 
       </Modal>
 
       <Modal open={sourcesOpen} onClose={() => setSourcesOpen(false)} title="Fuentes de inventario" eyebrow="Integraciones">
-        <div className="tc-notice"><Database size={16}/><span>Techcomm puede recibir inventario por Excel/CSV o preparar una conexión con SQL Server, PostgreSQL, MySQL, Oracle, API o un agente dentro de la red privada. Las contraseñas no se guardan en la tabla de configuración.</span></div>
+        <div className="tc-notice"><ShieldCheck size={16}/><span><strong>Integración protegida:</strong> las credenciales reales no se almacenan en la tabla de configuración. Las sincronizaciones por agente/API se autentican con HMAC SHA-256, timestamp y una ventana máxima de 5 minutos para reducir replay attacks.</span></div>
+        <div className="tc-metagrid">
+          <div className="tc-metabox"><small>Credenciales</small><strong><KeyRound size={14}/> Fuera del CRM</strong><div className="tc-cell-sub">Solo se guarda una referencia de secreto.</div></div>
+          <div className="tc-metabox"><small>Transporte</small><strong><ShieldCheck size={14}/> HTTPS + HMAC</strong><div className="tc-cell-sub">Firma del cuerpo antes de aceptar datos.</div></div>
+          <div className="tc-metabox"><small>Sincronización</small><strong><Clock3 size={14}/> Auditable</strong><div className="tc-cell-sub">Cada ejecución puede registrar filas leídas/escritas.</div></div>
+        </div>
+
         {sourcesLoading ? <div style={{ display: "grid", placeItems: "center", minHeight: 90 }}><Loader2 className="tc-spin"/></div> : <div style={{ display: "grid", gap: 8 }}>
-          {sources.map((source) => <div className="tc-metabox" key={source.id}><small>{source.source_type} · {source.connection_mode}</small><strong>{source.name}</strong><div className="tc-cell-sub">Estado: {source.status} · Última sync: {localDate(source.last_sync_at)}</div></div>)}
-          {!sources.length && <EmptyState title="Sin fuentes configuradas" message="Puedes registrar la primera conexión debajo." icon={<Database size={20}/>} />}
+          {sources.map((source) => <div className="tc-metabox" key={source.id}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div><small>{sourceTypeLabel(source.source_type)} · {source.connection_mode}</small><strong>{source.name}</strong></div>
+              <StatusBadge tone={sourceStatusTone(source.status)}>{sourceStatusLabel(source.status)}</StatusBadge>
+            </div>
+            <div className="tc-cell-sub" style={{ marginTop: 6 }}>Última sync: {localDate(source.last_sync_at)} · Ubicación: {source.location_configured ? "configurada" : "pendiente"} · Secreto: {source.secret_configured ? "configurado" : source.credential_reference_set ? "referenciado, falta entorno" : "pendiente"}</div>
+            <div className="tc-rowactions" style={{ marginTop: 9, justifyContent: "flex-start" }}>
+              <button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" disabled={sourceActionId === source.id} onClick={() => void sourceAction(source, "validate")}>{sourceActionId === source.id ? <Loader2 className="tc-spin"/> : <ShieldCheck/>}Validar</button>
+              {source.status === "active" ? <button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" disabled={sourceActionId === source.id} onClick={() => void sourceAction(source, "pause")}><PauseCircle/>Pausar</button> : <button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" disabled={sourceActionId === source.id} onClick={() => void sourceAction(source, "activate")}><PlayCircle/>Activar</button>}
+            </div>
+          </div>)}
+          {!sources.length && <EmptyState title="Sin fuentes configuradas" message="Puedes registrar la primera conexión debajo. Se creará como borrador y no recibirá datos hasta que pase validación y sea activada." icon={<Database size={20}/>} />}
         </div>}
+
         <form className="tc-form" onSubmit={createSource}>
           <div className="tc-form-grid">
             <label>Nombre<input className="tc-input" name="name" placeholder="ERP / Inventario central" required/></label>
-            <label>Motor<select className="tc-select" name="source_type" defaultValue="sql_server"><option value="sql_server">SQL Server</option><option value="postgresql">PostgreSQL</option><option value="mysql">MySQL</option><option value="oracle">Oracle</option><option value="api">API</option><option value="sftp">SFTP</option><option value="sharepoint">SharePoint</option><option value="onedrive">OneDrive</option><option value="excel_csv">Excel / CSV</option><option value="other">Otro</option></select></label>
+            <label>Motor<select className="tc-select" name="source_type" defaultValue="sql_server"><option value="sql_server">SQL Server</option><option value="postgresql">PostgreSQL</option><option value="mysql">MySQL</option><option value="oracle">Oracle</option><option value="api">API</option><option value="sftp">SFTP</option><option value="sharepoint">SharePoint</option><option value="onedrive">OneDrive</option><option value="excel_csv">Excel / CSV</option><option value="power_bi">Power BI</option><option value="other">Otro</option></select></label>
             <label>Modo<select className="tc-select" name="connection_mode" defaultValue="push_agent"><option value="push_agent">Agente dentro de red (recomendado)</option><option value="api_pull">API pull</option><option value="file_drop">Carpeta / file drop</option><option value="private_network">Red privada</option><option value="manual_upload">Carga manual</option></select></label>
+            <label>Frecuencia<select className="tc-select" name="schedule" defaultValue="manual"><option value="manual">Manual / controlada por agente</option><option value="every_5_minutes">Cada 5 minutos</option><option value="every_15_minutes">Cada 15 minutos</option><option value="hourly">Cada hora</option><option value="daily">Diaria</option></select></label>
             <label>Host<input className="tc-input" name="host" placeholder="servidor-interno"/></label>
             <label>Puerto<input className="tc-input" name="port" placeholder="1433 / 5432 / 3306"/></label><label>Base de datos<input className="tc-input" name="database"/></label>
-            <label>Schema<input className="tc-input" name="schema" placeholder="dbo / public"/></label><label>Tabla o vista<input className="tc-input" name="table_or_view" placeholder="vw_inventario"/></label>
-            <label className="tc-full">Referencia de secreto<input className="tc-input" name="secret_ref" placeholder="Referencia externa, nunca la contraseña"/></label>
-            <label className="tc-full">Descripción<textarea className="tc-input tc-textarea" name="description" placeholder="Qué datos alimentará y con qué frecuencia"/></label>
+            <label>Schema<input className="tc-input" name="schema" placeholder="dbo / public"/></label><label className="tc-full">Tabla, vista o recurso<input className="tc-input" name="table_or_view" placeholder="vw_inventario / endpoint de catálogo"/></label>
+            <label className="tc-full">Referencia de secreto<input className="tc-input" name="secret_ref" placeholder="TECHCOMM_INV_ERP_PROD_SECRET"/><span className="tc-cell-sub">Nunca pegues usuario, contraseña, token ni connection string. Este valor debe ser solo el nombre de una variable segura configurada fuera del CRM.</span></label>
+            <label className="tc-full">Descripción<textarea className="tc-input tc-textarea" name="description" placeholder="Qué datos alimentará, sistema de origen y observaciones operativas"/></label>
           </div>
-          <div className="tc-form-actions"><button type="submit" className="tc-btn"><Settings2/>Registrar fuente</button></div>
+          <div className="tc-form-actions"><button type="submit" className="tc-btn"><Settings2/>Registrar fuente segura</button></div>
         </form>
       </Modal>
     </div>
