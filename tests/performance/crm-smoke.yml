@@ -1,0 +1,35 @@
+config:
+  target: '{{ $env.TC_TARGET }}'
+  phases:
+    - duration: 30
+      arrivalRate: 1
+      maxVusers: 3
+      name: Safe smoke
+  plugins:
+    expect: {}
+    ensure:
+      thresholds:
+        - 'http.response_time.p95': 1500
+        - 'http.response_time.p99': 3000
+      conditions:
+        - expression: 'vusers.failed == 0'
+  defaults:
+    headers:
+      Cookie: '{{ $env.TC_SESSION_COOKIE }}'
+      User-Agent: 'Techcomm-Operations-Artillery-Smoke/1.0'
+
+scenarios:
+  - name: Authenticated smoke
+    flow:
+      - get:
+          url: '/api/crm/overview'
+          expect:
+            - statusCode: 200
+      - get:
+          url: '/api/crm/inventory?page=1&pageSize=50'
+          expect:
+            - statusCode: 200
+      - get:
+          url: '/api/crm/quotes?page=1&pageSize=50'
+          expect:
+            - statusCode: 200
