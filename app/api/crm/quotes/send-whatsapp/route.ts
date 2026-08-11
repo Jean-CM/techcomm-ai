@@ -8,6 +8,12 @@ function whatsappId(phone: string) {
   return digits.length === 10 ? `1${digits}` : digits;
 }
 
+function nextChannel(current: string | null | undefined, next: string) {
+  if (!current) return next;
+  if (current === next || current === "multiple") return current;
+  return "multiple";
+}
+
 export async function POST(request: Request) {
   const auth = await requireOrgRole(QUOTE_WRITE_ROLES);
   if (auth.error) return auth.error;
@@ -28,7 +34,7 @@ export async function POST(request: Request) {
   const admin = auth.admin!;
   const { data: quote, error } = await admin
     .from("quotes")
-    .select("id,quote_number,status,total,approval_required,approved_at,customer_name_snapshot,customer_phone_snapshot,public_token,expires_at")
+    .select("id,quote_number,status,total,approval_required,approved_at,customer_name_snapshot,customer_phone_snapshot,public_token,expires_at,sent_channel")
     .eq("organization_id", auth.organizationId!)
     .eq("id", quoteId)
     .single();
@@ -85,7 +91,11 @@ export async function POST(request: Request) {
   }
 
   const now = new Date().toISOString();
-  await admin.from("quotes").update({ sent_at: now, sent_channel: "whatsapp", status: "sent", updated_at: now }).eq("id", quote.id).eq("organization_id", auth.organizationId!);
+  const sentChannel = nextChannel(quote.sent_channel, "whatsapp");
+  await admin.from("quotes")
+    .update({ sent_at: now, sent_channel: sentChannel, status: "sent", updated_at: now })
+    .eq("id", quote.id)
+    .eq("organization_id", auth.organizationId!);
   await admin.from("quote_events").insert({
     organization_id: auth.organizationId,
     quote_id: quote.id,
