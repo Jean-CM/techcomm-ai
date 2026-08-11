@@ -34,29 +34,27 @@ export async function GET(request: NextRequest) {
 
   query = query.order("created_at", { ascending: false }).range(from, to);
 
-  const [rows, statusRows] = await Promise.all([
+  const [rows, summaryResult] = await Promise.all([
     query,
-    admin.from("quotes")
-      .select("status,total,approval_required,expires_at")
-      .eq("organization_id", auth.organizationId!)
-      .limit(5000),
+    admin.rpc("get_quote_summary", { p_organization_id: auth.organizationId! }).single(),
   ]);
 
   if (rows.error) return NextResponse.json({ ok: false, error: rows.error.message }, { status: 500 });
-  if (statusRows.error) return NextResponse.json({ ok: false, error: statusRows.error.message }, { status: 500 });
+  if (summaryResult.error) return NextResponse.json({ ok: false, error: summaryResult.error.message }, { status: 500 });
 
-  const all = statusRows.data ?? [];
-  const now = Date.now();
-  const active = all.filter((row) => !["accepted", "rejected", "cancelled", "expired"].includes(String(row.status)) && !(row.expires_at && new Date(row.expires_at).getTime() <= now));
+  const raw = summaryResult.data ?? {};
   const summary = {
-    total: all.length,
-    draft: all.filter((row) => row.status === "draft").length,
-    pending_approval: all.filter((row) => row.status === "pending_approval").length,
-    sent: all.filter((row) => row.status === "sent").length,
-    accepted: all.filter((row) => row.status === "accepted").length,
-    rejected: all.filter((row) => row.status === "rejected").length,
-    active_value: active.reduce((sum, row) => sum + Number(row.total || 0), 0),
-    accepted_value: all.filter((row) => row.status === "accepted").reduce((sum, row) => sum + Number(row.total || 0), 0),
+    total: Number(raw.total || 0),
+    draft: Number(raw.draft || 0),
+    pending_approval: Number(raw.pending_approval || 0),
+    sent: Number(raw.sent || 0),
+    accepted: Number(raw.accepted || 0),
+    rejected: Number(raw.rejected || 0),
+    review_requested: Number(raw.review_requested || 0),
+    cancelled: Number(raw.cancelled || 0),
+    expired: Number(raw.expired || 0),
+    active_value: Number(raw.active_value || 0),
+    accepted_value: Number(raw.accepted_value || 0),
   };
 
   const total = rows.count ?? 0;
