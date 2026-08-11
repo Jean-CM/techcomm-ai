@@ -380,7 +380,7 @@ export default function QuotePanel({
 
   const firstRow = payload.pagination.total ? (payload.pagination.page - 1) * payload.pagination.pageSize + 1 : 0;
   const lastRow = Math.min(payload.pagination.total, payload.pagination.page * payload.pagination.pageSize);
-  const previewUrl = detail ? `${window.location.origin}/cotizacion/${detail.public_token}` : "";
+  const previewUrl = detail ? `/cotizacion/${detail.public_token}` : "";
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
