@@ -94,36 +94,6 @@
   line-height: 1.1;
 }
 
-/* Presentation profile visibility. Real server-side authorization remains the
-   security boundary; these selectors only keep the partner-demo profile clean. */
-.tcTheme aside:has(select.tc-select option[value="secretary"]:checked) nav > div:has(a[href="/admin/auditoria"]),
-.tcTheme aside:has(select.tc-select option[value="supervisor"]:checked) nav > div:has(a[href="/admin/auditoria"]),
-.tcTheme aside:has(select.tc-select option[value="technician"]:checked) nav > div:has(a[href="/admin/auditoria"]) {
-  display: none !important;
-}
-
-/* Dashboard KPI relevance per presentation profile. */
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="secretary"]:checked) main .tc-kpi-grid > :nth-child(5),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="secretary"]:checked) main .tc-kpi-grid > :nth-child(7),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="secretary"]:checked) main .tc-kpi-grid > :nth-child(8),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="supervisor"]:checked) main .tc-kpi-grid > :nth-child(6),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="supervisor"]:checked) main .tc-kpi-grid > :nth-child(7),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="supervisor"]:checked) main .tc-kpi-grid > :nth-child(8),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(1),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(4),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(5),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(6),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(7),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(8) {
-  display: none !important;
-}
-
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="supervisor"]:checked) main .tc-kpi-grid + div > section:nth-child(4),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid + div > section:nth-child(3),
-.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid + div > section:nth-child(4) {
-  display: none !important;
-}
-
 .tcTheme .tc-inventory-table th,
 .tcTheme .tc-inventory-table td {
   padding-top: 8px;
@@ -135,7 +105,8 @@
   box-shadow: 0 1px 0 var(--border);
 }
 
-.tcTheme .tc-inventory-table tbody tr:hover {
+.tcTheme .tc-inventory-table tbody tr:hover,
+.tcTheme .tc-quote-table tbody tr:hover {
   background: rgba(0, 144, 212, 0.04);
 }
 
@@ -154,6 +125,153 @@
 .tcTheme .tc-page-indicator {
   color: var(--text-soft);
   white-space: nowrap;
+}
+
+/* Quotation workspace --------------------------------------------------- */
+.tcTheme .tc-quote-table {
+  min-width: 920px;
+}
+
+.tcTheme .tc-quote-search-results {
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-input);
+}
+
+.tcTheme .tc-quote-search-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tcTheme .tc-quote-search-row:last-child {
+  border-bottom: 0;
+}
+
+.tcTheme .tc-quote-search-row:hover {
+  background: var(--accent-soft);
+}
+
+.tcTheme .tc-quote-search-row > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.tcTheme .tc-quote-search-row > span:nth-child(2) {
+  text-align: right;
+}
+
+.tcTheme .tc-quote-search-row strong,
+.tcTheme .tc-quote-search-row b {
+  font-size: 12.5px;
+}
+
+.tcTheme .tc-quote-search-row small {
+  color: var(--muted);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tcTheme .tc-quote-lines {
+  display: grid;
+  gap: 7px;
+}
+
+.tcTheme .tc-quote-line {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 82px 92px 130px 34px;
+  align-items: end;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+
+.tcTheme .tc-quote-line > div:first-child {
+  min-width: 0;
+  align-self: center;
+}
+
+.tcTheme .tc-quote-line > div:first-child strong,
+.tcTheme .tc-quote-line > div:first-child small,
+.tcTheme .tc-quote-line .tc-num small {
+  display: block;
+}
+
+.tcTheme .tc-quote-line > div:first-child strong {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tcTheme .tc-quote-line small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10.25px;
+}
+
+.tcTheme .tc-quote-line label {
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.tcTheme .tc-quote-line .tc-input {
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.tcTheme .tc-quote-event {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.tcTheme .tc-quote-event:first-child {
+  border-top: 0;
+}
+
+.tcTheme .tc-quote-event .tc-dot {
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.tcTheme .tc-quote-event > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tcTheme .tc-quote-event strong {
+  font-size: 12.5px;
+}
+
+.tcTheme .tc-quote-event small {
+  color: var(--muted);
+  font-size: 10.5px;
 }
 
 @media (max-width: 1450px) {
@@ -231,6 +349,10 @@
     min-width: 1080px;
   }
 
+  .tcTheme .tc-quote-table {
+    min-width: 820px;
+  }
+
   .tcTheme .tc-table thead th,
   .tcTheme .tc-table tbody td {
     padding: 8px 10px;
@@ -247,7 +369,7 @@
   }
 
   .tcTheme .tc-modal {
-    width: min(94vw, 620px) !important;
+    width: min(94vw, 720px) !important;
     max-width: 94vw !important;
     max-height: 90vh;
   }
@@ -269,6 +391,10 @@
   .tcTheme .tc-audio {
     gap: 8px;
     padding: 10px;
+  }
+
+  .tcTheme .tc-quote-line {
+    grid-template-columns: minmax(160px, 1fr) 72px 82px 110px 34px;
   }
 }
 
@@ -299,6 +425,12 @@
     flex-direction: column;
   }
 
+  .tcTheme .tc-pagination .tc-rowactions {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    width: 100%;
+  }
+
   .tcTheme .tc-drawer,
   .tcTheme .tc-drawer-wide {
     inset: auto 0 0 0 !important;
@@ -323,6 +455,36 @@
 
   .tcTheme .tc-audio-time {
     white-space: nowrap;
+  }
+
+  .tcTheme .tc-quote-search-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .tcTheme .tc-quote-search-row > svg {
+    display: none;
+  }
+
+  .tcTheme .tc-quote-line {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .tcTheme .tc-quote-line > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .tcTheme .tc-quote-line .tc-num {
+    text-align: left;
+  }
+
+  .tcTheme .tc-quote-line > .tc-iconbtn {
+    justify-self: end;
+  }
+
+  .tcTheme .tc-card-head > .tc-btn {
+    width: 100%;
   }
 }
 
