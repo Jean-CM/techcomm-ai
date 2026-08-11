@@ -75,25 +75,27 @@ export async function GET(request: NextRequest) {
   else if (sort === "stock_desc") productsQuery = productsQuery.order("available_stock", { ascending: false });
   else productsQuery = productsQuery.order("updated_at", { ascending: false });
 
-  const [products, summary, categoryRows, brandRows] = await Promise.all([
+  const [products, summary, facets] = await Promise.all([
     productsQuery.range(from, to),
     admin!.rpc("get_inventory_summary", { p_organization_id: DEFAULT_ORG_ID }).single(),
-    admin!.from("products").select("category").eq("organization_id", DEFAULT_ORG_ID).eq("active", true).not("category", "is", null).limit(5000),
-    admin!.from("products").select("brand").eq("organization_id", DEFAULT_ORG_ID).eq("active", true).not("brand", "is", null).limit(5000),
+    admin!.rpc("get_inventory_facets", { p_organization_id: DEFAULT_ORG_ID }),
   ]);
 
   if (products.error) return NextResponse.json({ ok: false, error: products.error.message }, { status: 500 });
   if (summary.error) return NextResponse.json({ ok: false, error: summary.error.message }, { status: 500 });
+  if (facets.error) return NextResponse.json({ ok: false, error: facets.error.message }, { status: 500 });
 
-  const categories = Array.from(new Set((categoryRows.data ?? []).map((row) => row.category).filter(Boolean))).sort();
-  const brands = Array.from(new Set((brandRows.data ?? []).map((row) => row.brand).filter(Boolean))).sort();
+  const facetData = (facets.data ?? {}) as { categories?: string[]; brands?: string[] };
   const total = products.count ?? 0;
 
   return NextResponse.json({
     ok: true,
     products: products.data ?? [],
     summary: summary.data,
-    facets: { categories, brands },
+    facets: {
+      categories: Array.isArray(facetData.categories) ? facetData.categories : [],
+      brands: Array.isArray(facetData.brands) ? facetData.brands : [],
+    },
     pagination: {
       page,
       pageSize,
