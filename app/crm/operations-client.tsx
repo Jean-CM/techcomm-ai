@@ -15,6 +15,7 @@ import {
   Kpi, StatusBadge, Drawer, Modal, AudioPlayer, EmptyState, TableSkeleton, LogoMark,
   type Tone,
 } from "@/components/tc-ui";
+import InventoryPanel from "@/components/inventory-panel";
 
 const INACTIVITY_LIMIT_MS = 5 * 60 * 1000;
 
@@ -59,8 +60,6 @@ const STATUS_LABELS: Record<string,string> = {
   available:"Disponible", busy:"Ocupado", unavailable:"No disponible", new:"Nueva", scheduled:"Programada", confirmed:"Confirmada", rescheduled:"Reprogramada", assigned:"Asignada", in_progress:"En proceso", pending_customer:"Pendiente cliente", approved:"Aprobada", on_hold:"En espera", completed:"Completada", cancelled:"Cancelada", pending:"Pendiente", sent:"Enviada", failed:"Fallida", draft:"Borrador", accepted:"Aceptada", done:"Completada", rejected:"Rechazada", expired:"Vencida",
 };
 
-// Navigation model — icons + grouping for the shell. Keys match ROLE_META
-// menus exactly so the existing permission-based visibility is preserved.
 const NAV_GROUPS: { label:string; items:{ key:string; Icon:LucideIcon }[] }[] = [
   { label:"General", items:[{ key:"Dashboard", Icon:LayoutDashboard }] },
   { label:"Operación", items:[
@@ -186,7 +185,6 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
     return (!search||haystack.includes(search.toLowerCase()))&&(statusFilter==="all"||item.item_type===statusFilter);
   }),[data.products,search,statusFilter]);
 
-  // --- Dashboard aggregates (real data only) ---
   const activeOrders=data.work_orders.filter(item=>!["completed","cancelled"].includes(item.status)).length;
   const unassigned=data.appointments.filter(item=>!item.technician_id).length;
   const todayAppointments=data.appointments.filter(item=>item.starts_at.startsWith(today)).length;
@@ -480,29 +478,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
               </div>
             </div>}
 
-            {active==="Inventario"&&<div className="tc-card">
-              <div className="tc-card-head"><div><span className="tc-card-title-eyebrow">Inventario</span><h3>Productos, equipos y piezas</h3></div><StatusBadge tone="neutral" plain>{products.length} registros</StatusBadge></div>
-              <div className="tc-filterbar">
-                <div className="tc-search"><Search/><input className="tc-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nombre, marca, modelo, SKU o pieza..." /></div>
-                <select className="tc-select" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">Todos los tipos</option><option value="equipment">Equipo</option><option value="product">Producto</option><option value="part">Pieza</option><option value="accessory">Accesorio</option></select>
-              </div>
-              <div className="tc-tablewrap tc-scroll">
-                <table className="tc-table">
-                  <thead><tr><th>Producto</th><th>Tipo</th><th className="tc-num">Precio</th><th className="tc-num">Disponible</th><th>Estado</th><th style={{textAlign:"right"}}>Acción</th></tr></thead>
-                  <tbody>{products.map(item=>{const available=Math.max(0,item.stock-item.reserved_stock);const stockTone:Tone=available<=0?"bad":available<=3?"warning":"good";const stockText=available<=0?"Sin stock":available<=3?"Stock bajo":"Disponible";return(
-                    <tr key={item.id}>
-                      <td><div className="tc-strong">{item.piece_name||item.name}</div><div className="tc-cell-sub">{[item.brand||"Sin marca",item.model||"Sin modelo",item.sku||"Sin SKU"].join(" · ")}</div></td>
-                      <td>{statusLabel(item.item_type)}</td>
-                      <td className="tc-num tc-strong">{money(item.sale_price??item.price)}</td>
-                      <td className="tc-num">{available}<div className="tc-cell-sub">{item.stock} total · {item.reserved_stock} reserv.</div></td>
-                      <td><StatusBadge tone={stockTone}>{stockText}</StatusBadge></td>
-                      <td><div className="tc-rowactions">{can("edit_product")&&<button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" onClick={()=>setModal({kind:"product",item})}>Editar</button>}</div></td>
-                    </tr>
-                  );})}</tbody>
-                </table>
-                {!products.length&&<EmptyState title="Sin productos" message="No hay registros que coincidan con el filtro." icon={<Package size={20}/>} />}
-              </div>
-            </div>}
+            {active==="Inventario"&&<InventoryPanel canEdit={can("edit_product")} />}
 
             {active==="Cotizaciones"&&<div className="tc-card">
               <div className="tc-card-head"><div><span className="tc-card-title-eyebrow">Comercial</span><h3>Cotizaciones</h3></div><StatusBadge tone="neutral" plain>{data.quotes.length} registros</StatusBadge></div>
@@ -548,7 +524,6 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
         </main>
       </div>
 
-      {/* Conversation detail — right-side drawer, transcript loaded on demand */}
       <Drawer open={modal?.kind==="conversation"} onClose={closeOverlay} title={customersByPhone.get(cleanPhone(modal?.kind==="conversation"?modal.item.customer_phone:""))?.full_name||"Conversación"} eyebrow="Detalle de conversación" wide>
         {modal?.kind==="conversation"&&(conversationDetail?<>
           <div className="tc-metagrid">
@@ -568,14 +543,12 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
         </>:<TableSkeleton rows={5} cols={1} />)}
       </Drawer>
 
-      {/* Customer history — right-side drawer, timeline loaded on demand */}
       <Drawer open={modal?.kind==="history"} onClose={closeOverlay} title={modal?.kind==="history"?(modal.item.full_name||"Historial"):"Historial"} eyebrow="Historial del cliente">
         {modal?.kind==="history"&&(history.length?<div className={styles.timeline}>{history.map(item=>(
           <div className={styles.timelineItem} key={item.id}><time>{localDate(item.date)}</time><div><strong>{item.title}</strong><p>{item.detail}</p><small style={{color:"var(--muted-2)"}}>{item.type}</small></div></div>
         ))}</div>:<TableSkeleton rows={5} cols={1} />)}
       </Drawer>
 
-      {/* Focused edit / management modal */}
       <Modal open={Boolean(editModal)} onClose={closeOverlay} title={modalTitle} eyebrow="Techcomm Operations">
         {editModal&&<form className="tc-form" onSubmit={saveModal}>
           {modal?.kind==="customer"&&<div className="tc-form-grid">
