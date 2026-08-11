@@ -8,6 +8,7 @@ import {
   ExternalLink,
   FileText,
   Loader2,
+  Mail,
   PackagePlus,
   Plus,
   Search,
@@ -48,12 +49,16 @@ type QuoteRow = {
   accepted_at?: string | null;
   customer_name_snapshot?: string | null;
   customer_phone_snapshot?: string | null;
+  customer_email_snapshot?: string | null;
   customer_address_snapshot?: string | null;
   notes?: string | null;
   sent_at?: string | null;
   sent_channel?: string | null;
   customer_response?: string | null;
   customer_responded_at?: string | null;
+  cancel_reason_code?: string | null;
+  cancel_reason_note?: string | null;
+  cancelled_at?: string | null;
   created_at: string;
   updated_at?: string | null;
   expires_at?: string | null;
@@ -148,6 +153,17 @@ const STATUS_LABELS: Record<string, string> = {
   expired: "Vencida",
 };
 
+const CANCEL_REASONS = [
+  ["cliente_desistio", "Cliente desistió"],
+  ["duplicada", "Cotización duplicada"],
+  ["sin_stock", "Sin disponibilidad / stock"],
+  ["precio_no_aprobado", "Precio o descuento no aprobado"],
+  ["cambio_alcance", "Cambio de alcance"],
+  ["error_datos", "Error en datos de la cotización"],
+  ["reemplazada", "Reemplazada por una nueva cotización"],
+  ["otro", "Otro motivo"],
+] as const;
+
 function money(value?: number | null) {
   return new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP", maximumFractionDigits: 2 }).format(Number(value || 0));
 }
@@ -158,6 +174,11 @@ function localDate(value?: string | null) {
 
 function statusLabel(value?: string | null) {
   return value ? STATUS_LABELS[value] || value : "Sin estado";
+}
+
+function cancelReasonLabel(value?: string | null) {
+  if (!value) return "—";
+  return CANCEL_REASONS.find(([key]) => key === value)?.[1] || value.replace(/_/g, " ");
 }
 
 function statusTone(value?: string | null): Tone {
@@ -181,6 +202,19 @@ function eventLabel(value: string) {
   return labels[value] || value.replace(/_/g, " ");
 }
 
+function eventDetail(event: QuoteEvent) {
+  const metadata = event.metadata || {};
+  if (event.event_type === "sent" && metadata.channel) return `Canal: ${String(metadata.channel)}`;
+  if (event.event_type === "send_failed" && metadata.channel) return `Canal: ${String(metadata.channel)} · envío fallido`;
+  if (event.event_type === "cancel" && metadata.reason_code) {
+    const reason = cancelReasonLabel(String(metadata.reason_code));
+    const note = metadata.reason_note ? ` · ${String(metadata.reason_note)}` : "";
+    return `${reason}${note}`;
+  }
+  if (event.event_type === "customer_response" && metadata.action) return `Respuesta: ${String(metadata.action)}`;
+  return "";
+}
+
 export default function QuotePanel({
   customers,
   canManage = false,
@@ -198,6 +232,9 @@ export default function QuotePanel({
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelNote, setCancelNote] = useState("");
   const [selected, setSelected] = useState<QuoteRow | null>(null);
   const [detail, setDetail] = useState<QuoteDetail | null>(null);
   const [events, setEvents] = useState<QuoteEvent[]>([]);
@@ -335,40 +372,69 @@ export default function QuotePanel({
     }
   }
 
-  async function quoteAction(action: "approve_discount" | "cancel") {
+  async function approveDiscount() {
     if (!detail) return;
     setActionLoading(true);
     try {
       const response = await fetch(`/api/crm/quotes/${detail.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action: "approve_discount" }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No fue posible actualizar la cotización.");
-      setFeedback(action === "approve_discount" ? "Aprobación interna registrada." : "Cotización cancelada.");
+      if (!response.ok) throw new Error(data.error || "No fue posible aprobar la cotización.");
+      setFeedback("Aprobación interna registrada.");
       await load();
       await openDetail({ ...detail, ...data.quote });
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "No fue posible actualizar la cotización.");
+      setFeedback(error instanceof Error ? error.message : "No fue posible aprobar la cotización.");
     } finally {
       setActionLoading(false);
     }
   }
 
-  async function sendWhatsApp() {
+  async function submitCancel(event: FormEvent) {
+    event.preventDefault();
+    if (!detail || !cancelReason) return;
+    if (cancelReason === "otro" && cancelNote.trim().length < 5) {
+      setFeedback("Describe brevemente el motivo de cancelación.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/crm/quotes/${detail.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "cancel", cancel_reason_code: cancelReason, cancel_reason_note: cancelNote }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No fue posible cancelar la cotización.");
+      setCancelOpen(false);
+      setCancelReason("");
+      setCancelNote("");
+      setFeedback("Cotización cancelada con motivo registrado para auditoría.");
+      await load();
+      await openDetail({ ...detail, ...data.quote });
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "No fue posible cancelar la cotización.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function sendQuote(channel: "whatsapp" | "email") {
     if (!detail) return;
     setActionLoading(true);
-    setFeedback("Enviando cotización por WhatsApp...");
+    setFeedback(channel === "email" ? "Enviando cotización por correo..." : "Enviando cotización por WhatsApp...");
     try {
-      const response = await fetch("/api/crm/quotes/send-whatsapp", {
+      const response = await fetch(channel === "email" ? "/api/crm/quotes/send-email" : "/api/crm/quotes/send-whatsapp", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ quote_id: detail.id }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No fue posible enviar la cotización.");
-      setFeedback("Cotización enviada por WhatsApp.");
+      setFeedback(channel === "email" ? "Cotización enviada por correo." : "Cotización enviada por WhatsApp.");
       await load();
       await openDetail({ ...detail, status: "sent", sent_at: new Date().toISOString() });
     } catch (error) {
@@ -381,6 +447,7 @@ export default function QuotePanel({
   const firstRow = payload.pagination.total ? (payload.pagination.page - 1) * payload.pagination.pageSize + 1 : 0;
   const lastRow = Math.min(payload.pagination.total, payload.pagination.page * payload.pagination.pageSize);
   const previewUrl = detail ? `/cotizacion/${detail.public_token}` : "";
+  const canDeliver = detail ? ["draft", "sent"].includes(detail.status) : false;
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -476,6 +543,25 @@ export default function QuotePanel({
         </form>
       </Modal>
 
+      <Modal open={cancelOpen} onClose={() => { setCancelOpen(false); setCancelReason(""); setCancelNote(""); }} title="Cancelar cotización" eyebrow="Auditoría comercial">
+        <form className="tc-form" onSubmit={submitCancel}>
+          <div className="tc-notice"><AlertTriangle size={16}/><span>La cancelación quedará registrada en el historial con usuario, fecha y motivo para análisis posterior.</span></div>
+          <label>Motivo de cancelación
+            <select className="tc-select" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} required>
+              <option value="">Seleccionar motivo</option>
+              {CANCEL_REASONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
+          <label>Detalle / observación
+            <textarea className="tc-input tc-textarea" value={cancelNote} onChange={(e) => setCancelNote(e.target.value)} placeholder="Qué ocurrió, referencia o acción tomada..." maxLength={1000}/>
+          </label>
+          <div className="tc-form-actions">
+            <button type="button" className="tc-btn tc-btn-ghost" onClick={() => { setCancelOpen(false); setCancelReason(""); setCancelNote(""); }}>Volver</button>
+            <button type="submit" className="tc-btn" disabled={actionLoading || !cancelReason}>{actionLoading ? <Loader2 className="tc-spin"/> : <XCircle/>}Confirmar cancelación</button>
+          </div>
+        </form>
+      </Modal>
+
       <Drawer open={Boolean(selected)} onClose={() => { setSelected(null); setDetail(null); setEvents([]); }} title={detail?.quote_number || selected?.quote_number || "Cotización"} eyebrow="Detalle comercial" wide>
         {detailLoading || !detail ? <TableSkeleton rows={7} cols={2}/> : <div style={{ display: "grid", gap: 14 }}>
           <div className="tc-metagrid">
@@ -483,6 +569,13 @@ export default function QuotePanel({
             <div className="tc-metabox"><small>Estado</small><StatusBadge tone={statusTone(detail.status)}>{statusLabel(detail.status)}</StatusBadge></div>
             <div className="tc-metabox"><small>Total</small><strong>{money(detail.total)}</strong></div>
             <div className="tc-metabox"><small>Vence</small><strong>{detail.expires_at ? new Date(detail.expires_at).toLocaleDateString("es-DO") : "—"}</strong></div>
+          </div>
+
+          <div className="tc-metagrid">
+            <div className="tc-metabox"><small>Teléfono</small><strong>{detail.customer_phone_snapshot || "—"}</strong></div>
+            <div className="tc-metabox"><small>Correo</small><strong>{detail.customer_email_snapshot || "No registrado"}</strong></div>
+            <div className="tc-metabox"><small>Último envío</small><strong>{detail.sent_channel || "No enviada"}</strong></div>
+            <div className="tc-metabox"><small>Fecha de envío</small><strong>{localDate(detail.sent_at)}</strong></div>
           </div>
 
           <div className="tc-card">
@@ -497,19 +590,21 @@ export default function QuotePanel({
             <div className="tc-metabox"><small>Entrega</small><strong>{detail.delivery_included ? (detail.delivery_amount > 0 ? money(detail.delivery_amount) : "Incluida") : "No incluida"}</strong></div>
           </div>
 
+          {detail.status === "cancelled" && <div className="tc-notice"><XCircle size={16}/><span><strong>Motivo:</strong> {cancelReasonLabel(detail.cancel_reason_code)}{detail.cancel_reason_note ? ` · ${detail.cancel_reason_note}` : ""}{detail.cancelled_at ? ` · ${localDate(detail.cancelled_at)}` : ""}</span></div>}
           {detail.warranty_note && <div className="tc-notice"><ShieldCheck size={16}/><span>{detail.warranty_note}</span></div>}
           {detail.notes && <div className="tc-notice"><FileText size={16}/><span>{detail.notes}</span></div>}
 
           <div className="tc-rowactions" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
             <a className="tc-btn tc-btn-secondary tc-btn-sm" href={previewUrl} target="_blank" rel="noreferrer"><ExternalLink/>Vista cliente</a>
-            {canApprove && detail.status === "pending_approval" && <button type="button" className="tc-btn tc-btn-sm" onClick={() => void quoteAction("approve_discount")} disabled={actionLoading}><ShieldCheck/>Aprobar descuento</button>}
-            {canManage && detail.status === "draft" && <button type="button" className="tc-btn tc-btn-sm" onClick={() => void sendWhatsApp()} disabled={actionLoading}><Send/>Enviar WhatsApp</button>}
-            {canManage && !["accepted", "rejected", "cancelled", "expired"].includes(detail.status) && <button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={() => void quoteAction("cancel")} disabled={actionLoading}><XCircle/>Cancelar</button>}
+            {canApprove && detail.status === "pending_approval" && <button type="button" className="tc-btn tc-btn-sm" onClick={() => void approveDiscount()} disabled={actionLoading}><ShieldCheck/>Aprobar descuento</button>}
+            {canManage && canDeliver && <button type="button" className="tc-btn tc-btn-sm" onClick={() => void sendQuote("whatsapp")} disabled={actionLoading}><Send/>Enviar WhatsApp</button>}
+            {canManage && canDeliver && <button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" onClick={() => void sendQuote("email")} disabled={actionLoading || !detail.customer_email_snapshot} title={detail.customer_email_snapshot ? "Enviar cotización por correo" : "El cliente no tiene correo registrado"}><Mail/>{detail.customer_email_snapshot ? "Enviar correo" : "Sin correo"}</button>}
+            {canManage && !["accepted", "rejected", "cancelled", "expired"].includes(detail.status) && <button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={() => setCancelOpen(true)} disabled={actionLoading}><XCircle/>Cancelar</button>}
           </div>
 
           <div className="tc-card">
             <div className="tc-card-head"><div><span className="tc-card-title-eyebrow">Trazabilidad</span><h3>Historial de la cotización</h3></div></div>
-            <div>{events.length ? events.map((event) => <div className="tc-quote-event" key={event.id}><span className="tc-dot"/><div><strong>{eventLabel(event.event_type)}</strong><small>{event.actor_type} · {localDate(event.created_at)}</small></div></div>) : <EmptyState title="Sin eventos" message="La trazabilidad aparecerá aquí a medida que avance la cotización." icon={<Clock3 size={20}/>} />}</div>
+            <div>{events.length ? events.map((event) => <div className="tc-quote-event" key={event.id}><span className="tc-dot"/><div><strong>{eventLabel(event.event_type)}</strong><small>{event.actor_type} · {localDate(event.created_at)}{eventDetail(event) ? ` · ${eventDetail(event)}` : ""}</small></div></div>) : <EmptyState title="Sin eventos" message="La trazabilidad aparecerá aquí a medida que avance la cotización." icon={<Clock3 size={20}/>} />}</div>
           </div>
         </div>}
       </Drawer>
