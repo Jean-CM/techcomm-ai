@@ -4,9 +4,9 @@
 
 .tcTheme .tc-kpi-grid .tc-kpi {
   gap: 5px;
-  padding: 9px 11px;
-  border-radius: 10px;
   min-height: 72px;
+  padding: 9px 11px;
+  border-radius: 9px;
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi-value {
@@ -21,12 +21,13 @@
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi-label {
   font-size: 9.75px;
+  line-height: 1.2;
   letter-spacing: .015em;
 }
 
@@ -93,11 +94,33 @@
   line-height: 1.1;
 }
 
-/* Presentation profile visibility: privileged Control links remain protected
-   server-side and are also hidden in non-admin preview profiles. */
+/* Presentation profile visibility. Real server-side authorization remains the
+   security boundary; these selectors only keep the partner-demo profile clean. */
 .tcTheme aside:has(select.tc-select option[value="secretary"]:checked) nav > div:has(a[href="/admin/auditoria"]),
 .tcTheme aside:has(select.tc-select option[value="supervisor"]:checked) nav > div:has(a[href="/admin/auditoria"]),
 .tcTheme aside:has(select.tc-select option[value="technician"]:checked) nav > div:has(a[href="/admin/auditoria"]) {
+  display: none !important;
+}
+
+/* Dashboard KPI relevance per presentation profile. */
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="secretary"]:checked) main .tc-kpi-grid > :nth-child(5),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="secretary"]:checked) main .tc-kpi-grid > :nth-child(7),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="secretary"]:checked) main .tc-kpi-grid > :nth-child(8),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="supervisor"]:checked) main .tc-kpi-grid > :nth-child(6),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="supervisor"]:checked) main .tc-kpi-grid > :nth-child(7),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="supervisor"]:checked) main .tc-kpi-grid > :nth-child(8),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(1),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(4),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(5),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(6),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(7),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid > :nth-child(8) {
+  display: none !important;
+}
+
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="supervisor"]:checked) main .tc-kpi-grid + div > section:nth-child(4),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid + div > section:nth-child(3),
+.tcTheme:has(select[aria-label="Perfil de presentación"] option[value="technician"]:checked) main .tc-kpi-grid + div > section:nth-child(4) {
   display: none !important;
 }
 
@@ -120,12 +143,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   padding: 9px 12px;
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 .tcTheme .tc-page-indicator {
@@ -145,16 +168,167 @@
   }
 }
 
-@media (max-width: 760px) {
-  .tcTheme .tc-inventory-kpis,
-  .tcTheme .tc-kpi-grid {
+@media (max-width: 860px) {
+  .tcTheme .tc-kpi-grid,
+  .tcTheme .tc-inventory-kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .tcTheme .tc-kpi-grid .tc-kpi,
+  .tcTheme .tc-inventory-kpis .tc-kpi-action .tc-kpi {
+    min-height: 64px;
+    padding: 7px 9px;
+  }
+
+  .tcTheme .tc-kpi-grid .tc-kpi-value,
+  .tcTheme .tc-inventory-kpis .tc-kpi-value {
+    font-size: 20px;
+  }
+
+  .tcTheme .tc-card-head {
+    gap: 10px;
+    padding: 12px 13px;
+    flex-wrap: wrap;
+  }
+
+  .tcTheme .tc-card-head h3 {
+    font-size: 14px;
+  }
+
+  .tcTheme .tc-filterbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    padding: 10px 12px;
+  }
+
+  .tcTheme .tc-filterbar .tc-search {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .tcTheme .tc-filterbar .tc-select,
+  .tcTheme .tc-filterbar > .tc-input {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0;
+  }
+
+  .tcTheme .tc-tablewrap {
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tcTheme .tc-table {
+    min-width: 760px;
+    font-size: 12.5px;
+  }
+
+  .tcTheme .tc-inventory-table {
+    min-width: 1080px;
+  }
+
+  .tcTheme .tc-table thead th,
+  .tcTheme .tc-table tbody td {
+    padding: 8px 10px;
+  }
+
+  .tcTheme .tc-rowactions {
+    flex-wrap: nowrap;
+  }
+
+  .tcTheme .tc-drawer,
+  .tcTheme .tc-drawer-wide {
+    width: min(94vw, 620px) !important;
+    max-width: 94vw !important;
+  }
+
+  .tcTheme .tc-modal {
+    width: min(94vw, 620px) !important;
+    max-width: 94vw !important;
+    max-height: 90vh;
+  }
+
+  .tcTheme .tc-drawer-head,
+  .tcTheme .tc-drawer-body {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .tcTheme .tc-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .tcTheme .tc-full {
+    grid-column: 1 !important;
+  }
+
+  .tcTheme .tc-audio {
+    gap: 8px;
+    padding: 10px;
   }
 }
 
-@media (max-width: 460px) {
-  .tcTheme .tc-inventory-kpis,
-  .tcTheme .tc-kpi-grid {
+@media (max-width: 560px) {
+  .tcTheme .tc-kpi-grid,
+  .tcTheme .tc-inventory-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tcTheme .tc-kpi-label {
+    font-size: 9px !important;
+  }
+
+  .tcTheme .tc-kpi-sub {
+    font-size: 9.5px !important;
+  }
+
+  .tcTheme .tc-filterbar {
+    grid-template-columns: 1fr;
+  }
+
+  .tcTheme .tc-filterbar .tc-search {
+    grid-column: 1;
+  }
+
+  .tcTheme .tc-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tcTheme .tc-drawer,
+  .tcTheme .tc-drawer-wide {
+    inset: auto 0 0 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: min(92vh, 860px) !important;
+    max-height: 92vh !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+
+  .tcTheme .tc-modal {
+    width: calc(100vw - 18px) !important;
+    max-width: calc(100vw - 18px) !important;
+    max-height: 92vh;
+  }
+
+  .tcTheme .tc-audio-meta {
+    gap: 4px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tcTheme .tc-audio-time {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 370px) {
+  .tcTheme .tc-kpi-grid,
+  .tcTheme .tc-inventory-kpis {
     grid-template-columns: 1fr;
   }
 }
