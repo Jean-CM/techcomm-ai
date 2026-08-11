@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { checkServiceHours, SERVICE_HOURS_LABEL } from "@/lib/service-hours";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 type Payload = {
@@ -12,22 +13,7 @@ type Payload = {
 };
 
 const ALLOWED_STATUSES = new Set(["scheduled", "confirmed", "rescheduled", "completed", "cancelled"]);
-const SERVICE_TIME_ZONE = "America/Santo_Domingo";
-const OPEN_MINUTES = 8 * 60;
-const CLOSE_MINUTES = 16 * 60;
 const DEFAULT_APPOINTMENT_MINUTES = 60;
-
-function minutesInSantoDomingo(date: Date) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: SERVICE_TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
-  return hour * 60 + minute;
-}
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Payload;
@@ -54,8 +40,7 @@ export async function POST(request: Request) {
     if (Number.isNaN(parsed.getTime())) {
       return NextResponse.json({ ok: false, error: "La fecha y hora no son válidas." }, { status: 400 });
     }
-    const minutes = minutesInSantoDomingo(parsed);
-    outsideHours = minutes < OPEN_MINUTES || minutes > CLOSE_MINUTES;
+    outsideHours = !checkServiceHours(parsed).allowed;
     changes.starts_at = parsed.toISOString();
     changes.status = body.status || "rescheduled";
     changes.confirmation_status = "pending";
@@ -149,7 +134,7 @@ export async function POST(request: Request) {
   }
 
   const warnings = [
-    outsideHours ? "Programada fuera del horario habitual (8:00 a. m.–4:00 p. m.) por anulación manual." : null,
+    outsideHours ? `Programada fuera del horario habitual (${SERVICE_HOURS_LABEL}) por anulación manual.` : null,
     scheduleConflict ? "Advertencia: el técnico seleccionado ya tiene otra cita que se cruza con este horario. El cambio fue guardado, pero conviene revisar la agenda." : null,
   ].filter(Boolean);
 

@@ -1,0 +1,105 @@
+config:
+  target: '{{ $env.TC_TARGET }}'
+  phases:
+    - duration: 60
+      arrivalRate: 2
+      rampTo: 5
+      maxVusers: 40
+      name: Warm up
+    - duration: 120
+      arrivalRate: 5
+      rampTo: 15
+      maxVusers: 100
+      name: Ramp to 100-user profile
+    - duration: 300
+      arrivalRate: 15
+      maxVusers: 120
+      name: Sustained operating load
+    - duration: 60
+      arrivalRate: 15
+      rampTo: 25
+      maxVusers: 150
+      name: Short operational spike
+  plugins:
+    expect: {}
+    ensure:
+      thresholds:
+        - 'http.response_time.p95': 1200
+        - 'http.response_time.p99': 2500
+      conditions:
+        - expression: 'vusers.failed == 0'
+  defaults:
+    headers:
+      Cookie: '{{ $env.TC_SESSION_COOKIE }}'
+      Accept: 'application/json,text/html;q=0.9,*/*;q=0.8'
+      User-Agent: 'Techcomm-Operations-Artillery/1.0'
+
+scenarios:
+  - name: Dashboard and overview
+    weight: 30
+    flow:
+      - get:
+          url: '/crm'
+          name: 'CRM shell'
+          expect:
+            - statusCode: 200
+      - think: 1
+      - get:
+          url: '/api/crm/overview'
+          name: 'CRM overview'
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 2
+
+  - name: Inventory browsing
+    weight: 35
+    flow:
+      - get:
+          url: '/api/crm/inventory?page=1&pageSize=50&sort=updated_desc'
+          name: 'Inventory first page'
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 1
+      - get:
+          url: '/api/crm/inventory?page=1&pageSize=50&q=Samsung&stockStatus=available'
+          name: 'Inventory search Samsung'
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 1
+      - get:
+          url: '/api/crm/inventory?page=100&pageSize=50&sort=updated_desc'
+          name: 'Inventory deep page'
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 2
+
+  - name: Quote center browsing
+    weight: 20
+    flow:
+      - get:
+          url: '/api/crm/quotes?page=1&pageSize=50&status=all'
+          name: 'Quote center list'
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 2
+
+  - name: Operational refresh pattern
+    weight: 15
+    flow:
+      - get:
+          url: '/api/crm/overview'
+          name: 'Overview refresh'
+          expect:
+            - statusCode: 200
+      - think: 3
+      - get:
+          url: '/api/crm/inventory?page=1&pageSize=25&stockStatus=low'
+          name: 'Low stock filter'
+          expect:
+            - statusCode: 200
+      - think: 2

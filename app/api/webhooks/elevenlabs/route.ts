@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 // Voice cost constants — update if your ElevenLabs plan or Twilio rates change.
-const ELEVENLABS_COST_PER_MINUTE = 0.10; // Creator plan published rate
-const TWILIO_COST_PER_MINUTE_LOCAL = 0.1155; // Dominican Republic, landline
+const ELEVENLABS_COST_PER_MINUTE = 0.10;
+const TWILIO_COST_PER_MINUTE_LOCAL = 0.1155;
 const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
 const WEBHOOK_SIGNATURE_TOLERANCE_SECONDS = 5 * 60;
 
@@ -67,7 +67,6 @@ function transcriptContent(item: TranscriptItem) {
 }
 
 function verifySignature(rawBody: string, header: string | null, secret: string | undefined) {
-  // Fail closed: a missing secret is a configuration error, never an open webhook.
   if (!secret || !header) return false;
 
   const parts = Object.fromEntries(
@@ -81,8 +80,6 @@ function verifySignature(rawBody: string, header: string | null, secret: string 
   const provided = parts.v0 ?? parts.v1;
   if (!Number.isFinite(timestamp) || !provided) return false;
 
-  // ElevenLabs signs the timestamp together with the raw body. Reject stale
-  // deliveries so a captured valid request cannot be replayed indefinitely.
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - timestamp) > WEBHOOK_SIGNATURE_TOLERANCE_SECONDS) return false;
 
@@ -122,6 +119,63 @@ export async function POST(request: Request) {
       { onConflict: "conversation_id,event_type" },
     );
     return NextResponse.json({ ok: true });
+  }
+
+  // ElevenLabs can deliver the complete MP3 in a dedicated post_call_audio
+  // webhook. Persist it in the private Supabase bucket and attach it to the
+  // transcription event when available. If audio arrives first, the temporary
+  // audio event lets the transcription handler link it later.
+  if (event.type === "post_call_audio") {
+    const conversationExternalId = asString(data.conversation_id);
+    const fullAudio = asString(data.full_audio);
+    if (!conversationExternalId || !fullAudio) {
+      return NextResponse.json({ ok: false, error: "Missing conversation_id or full_audio" }, { status: 400 });
+    }
+
+    try {
+      const audioBuffer = Buffer.from(fullAudio, "base64");
+      if (!audioBuffer.length) {
+        return NextResponse.json({ ok: false, error: "Empty audio payload" }, { status: 400 });
+      }
+
+      const path = `${conversationExternalId}.mp3`;
+      const capturedAt = new Date().toISOString();
+      const { error: uploadError } = await supabase.storage
+        .from("call-recordings")
+        .upload(path, audioBuffer, { contentType: "audio/mpeg", upsert: true });
+
+      if (uploadError) {
+        return NextResponse.json({ ok: false, error: "Audio storage failed" }, { status: 500 });
+      }
+
+      const { data: existingEvents } = await supabase
+        .from("call_events")
+        .select("id")
+        .eq("conversation_id", conversationExternalId);
+
+      if (existingEvents?.length) {
+        await supabase
+          .from("call_events")
+          .update({ audio_storage_path: path, audio_captured_at: capturedAt })
+          .eq("conversation_id", conversationExternalId);
+      } else {
+        await supabase.from("call_events").upsert(
+          {
+            conversation_id: conversationExternalId,
+            agent_id: asString(data.agent_id),
+            event_type: "post_call_audio",
+            status: "done",
+            audio_storage_path: path,
+            audio_captured_at: capturedAt,
+          },
+          { onConflict: "conversation_id,event_type" },
+        );
+      }
+
+      return NextResponse.json({ ok: true, audio_saved: true });
+    } catch {
+      return NextResponse.json({ ok: false, error: "Audio processing failed" }, { status: 500 });
+    }
   }
 
   if (event.type === "post_call_transcription") {
@@ -217,30 +271,50 @@ export async function POST(request: Request) {
       { onConflict: "conversation_id,event_type" },
     );
 
-    // Capture the audio recording for regulatory retention (INDOTEL may request
-    // a specific call). Best-effort: a failure here must never break the rest
-    // of the webhook, since the transcript is already safely stored above.
-    if (conversationExternalId && process.env.ELEVENLABS_API_KEY) {
-      try {
-        const audioResponse = await fetch(
-          `https://api.elevenlabs.io/v1/convai/conversations/${conversationExternalId}/audio`,
-          { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
-        );
-        if (audioResponse.ok) {
-          const audioBuffer = await audioResponse.arrayBuffer();
-          const path = `${conversationExternalId}.mp3`;
-          const { error: uploadError } = await supabase.storage
-            .from("call-recordings")
-            .upload(path, Buffer.from(audioBuffer), { contentType: "audio/mpeg", upsert: true });
-          if (!uploadError) {
-            await supabase
-              .from("call_events")
-              .update({ audio_storage_path: path, audio_captured_at: new Date().toISOString() })
-              .eq("conversation_id", conversationExternalId);
+    if (conversationExternalId) {
+      // If the dedicated audio webhook arrived first, link the already-stored
+      // file to the transcription event. Otherwise keep the existing API-fetch
+      // fallback so recording retention also works when only transcription
+      // webhooks are enabled.
+      const { data: storedAudioEvent } = await supabase
+        .from("call_events")
+        .select("audio_storage_path,audio_captured_at")
+        .eq("conversation_id", conversationExternalId)
+        .eq("event_type", "post_call_audio")
+        .maybeSingle();
+
+      if (storedAudioEvent?.audio_storage_path) {
+        await supabase
+          .from("call_events")
+          .update({
+            audio_storage_path: storedAudioEvent.audio_storage_path,
+            audio_captured_at: storedAudioEvent.audio_captured_at ?? new Date().toISOString(),
+          })
+          .eq("conversation_id", conversationExternalId)
+          .eq("event_type", "post_call_transcription");
+      } else if (process.env.ELEVENLABS_API_KEY) {
+        try {
+          const audioResponse = await fetch(
+            `https://api.elevenlabs.io/v1/convai/conversations/${conversationExternalId}/audio`,
+            { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY } }
+          );
+          if (audioResponse.ok) {
+            const audioBuffer = await audioResponse.arrayBuffer();
+            const path = `${conversationExternalId}.mp3`;
+            const { error: uploadError } = await supabase.storage
+              .from("call-recordings")
+              .upload(path, Buffer.from(audioBuffer), { contentType: "audio/mpeg", upsert: true });
+            if (!uploadError) {
+              await supabase
+                .from("call_events")
+                .update({ audio_storage_path: path, audio_captured_at: new Date().toISOString() })
+                .eq("conversation_id", conversationExternalId)
+                .eq("event_type", "post_call_transcription");
+            }
           }
+        } catch {
+          // Best effort. A later audio webhook or admin backfill can still save it.
         }
-      } catch {
-        // Swallow — audio capture is best-effort and must not fail the webhook.
       }
     }
 
@@ -313,11 +387,6 @@ export async function POST(request: Request) {
     const callDurationForValidation = Number(
       metadata.call_duration_secs ?? metadata.duration_secs ?? data.call_duration_secs ?? 0
     );
-    // A real confirmation requires an actual back-and-forth. Voicemail pickups
-    // and rings-with-no-answer produce very short "calls" with little to no
-    // customer speech — never treat these as a confirmation, no matter what
-    // the agent's own classification says, since it may have nothing real to
-    // classify from.
     const userTurns = transcript.filter((item) => item.role === "user").length;
     const looksUnreachable = callDurationForValidation > 0 && (callDurationForValidation < 12 || userTurns === 0);
 
@@ -334,8 +403,6 @@ export async function POST(request: Request) {
       if (mapped) await supabase.from("appointments").update(mapped).eq("id", appointmentId);
     }
 
-    // Log the real voice cost for this call so it shows up in ai_agent_runs
-    // alongside the text-channel runs from the OpenAI orchestrator.
     const durationSeconds = Number(
       metadata.call_duration_secs ?? metadata.duration_secs ?? data.call_duration_secs ?? 0
     );

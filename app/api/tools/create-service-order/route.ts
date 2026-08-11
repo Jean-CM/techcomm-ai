@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin, requireToolSecret } from "@/lib/supabase-admin";
+import {
+  checkServiceHours,
+  SERVICE_HOURS_LABEL,
+  SERVICE_TIME_ZONE,
+  serviceHoursCustomerMessage,
+} from "@/lib/service-hours";
 
 type Payload = {
   customer_name?: string;
@@ -25,10 +31,6 @@ type MissingField =
   | "scheduled_at"
   | "visit_fee_accepted"
   | "customer_confirmed";
-
-const SERVICE_TIME_ZONE = "America/Santo_Domingo";
-const SERVICE_OPEN_MINUTES = 8 * 60;
-const SERVICE_CLOSE_MINUTES = 16 * 60;
 
 function normalizePhone(value?: string) {
   const digits = String(value ?? "").replace(/\D/g, "");
@@ -111,7 +113,7 @@ function questionFor(field: MissingField) {
     address: "¿En qué dirección o sector se encuentra el equipo?",
     equipment: "¿Qué equipo necesita revisión?",
     issue: "¿Qué falla presenta el equipo?",
-    scheduled_at: "Nuestro horario de servicio es de 8:00 a. m. a 4:00 p. m. ¿Qué día y hora dentro de ese horario te convienen para la visita?",
+    scheduled_at: `${serviceHoursCustomerMessage()} ¿Qué día y hora dentro de ese horario te convienen para la visita?`,
     visit_fee_accepted: "La visita técnica cuesta RD$500 y se acredita a la factura si realizas la reparación con Techcomm. ¿Deseas continuar?",
     customer_confirmed: "¿Confirmas los datos de tu visita?",
   };
@@ -122,25 +124,12 @@ function normalizeScheduledAt(value: string) {
   const trimmed = value.trim();
   // If there's no timezone designator (no trailing Z and no +/-HH:MM offset),
   // the model forgot the offset. Assume Santo Domingo local time (-04:00)
-  // instead of letting JS silently treat it as UTC, which was shifting valid
-  // appointments outside business hours and causing repeated rejection loops.
+  // instead of letting JS silently treat it as UTC.
   const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(trimmed);
   if (!hasTimezone && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
     return `${trimmed}-04:00`;
   }
   return trimmed;
-}
-
-function minutesInServiceTimeZone(date: Date) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: SERVICE_TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
-  return hour * 60 + minute;
 }
 
 function formatAppointment(date: Date) {
@@ -209,21 +198,21 @@ export async function POST(request: Request) {
       missing_fields: missingFields,
       next_field: nextField,
       next_question: questionFor(nextField),
-      service_hours: "8:00 a. m. a 4:00 p. m.",
+      service_hours: SERVICE_HOURS_LABEL,
       instruction: "No se creó ninguna orden. Haz solamente la pregunta indicada y vuelve a ejecutar la herramienta cuando tengas todos los datos reales. Nunca uses valores como 'No proporcionado'.",
     });
   }
 
-  const appointmentMinutes = minutesInServiceTimeZone(scheduledAt!);
-  if (appointmentMinutes < SERVICE_OPEN_MINUTES || appointmentMinutes > SERVICE_CLOSE_MINUTES) {
+  const hoursCheck = checkServiceHours(scheduledAt!);
+  if (!hoursCheck.allowed) {
     return NextResponse.json({
       ok: false,
       status: "needs_more_information",
       missing_fields: ["scheduled_at"],
       next_field: "scheduled_at",
-      next_question: "Nuestro horario de servicio es de 8:00 a. m. a 4:00 p. m. ¿Qué otra hora dentro de ese horario prefieres?",
-      service_hours: "8:00 a. m. a 4:00 p. m.",
-      instruction: "No se creó ninguna orden. Solicita otra hora y vuelve a ejecutar la herramienta con la nueva fecha en formato ISO 8601.",
+      next_question: `${serviceHoursCustomerMessage()} ¿Qué otro día y hora dentro de ese horario prefieres?`,
+      service_hours: SERVICE_HOURS_LABEL,
+      instruction: "No se creó ninguna orden. Solicita otra fecha u hora válida y vuelve a ejecutar la herramienta con la nueva fecha en formato ISO 8601.",
     });
   }
 
@@ -280,11 +269,9 @@ export async function POST(request: Request) {
     customer = data;
   }
 
-  // Technician assignment is manual by design (dispatcher decision) — the
-  // dispatcher needs visibility into zone, current workload, and specialty
-  // that only a human should judge for now. The AI never auto-assigns; every
-  // new order is created unassigned and shows up for manual dispatch in the CRM.
-
+  // Technician assignment is manual by design (dispatcher decision).
+  // The AI never auto-assigns; every new order is created unassigned and
+  // shows up for manual dispatch in the CRM.
   const { data: appointment, error: appointmentError } = await supabase
     .from("appointments")
     .insert({
@@ -339,7 +326,7 @@ export async function POST(request: Request) {
     order: workOrder,
     customer,
     appointment,
-    service_hours: "8:00 a. m. a 4:00 p. m.",
+    service_hours: SERVICE_HOURS_LABEL,
     technician: null,
     technician_assigned: false,
     requires_manual_assignment: true,

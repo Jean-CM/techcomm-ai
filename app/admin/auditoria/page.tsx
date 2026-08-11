@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import AuditSearch from "./audit-search";
@@ -26,19 +27,27 @@ export default async function AuditPage() {
   }
 
   return (
-    <main className="container" style={{ padding: "32px 0 72px" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", gap: 20, alignItems: "center", marginBottom: 32 }}>
-        <div>
-          <span className="badge">Super Admin / Admin</span>
-          <h1 style={{ marginBottom: 4 }}>Auditoría de llamadas</h1>
-          <p className="muted" style={{ margin: 0 }}>
-            Busca grabaciones por fecha, teléfono, cédula o cliente — para responder a solicitudes de INDOTEL u otra entidad reguladora.
-          </p>
-        </div>
-        <Link className="button" href="/admin">Volver a Super Admin</Link>
-      </header>
+    <main className="tcTheme" style={{ minHeight: "100vh", padding: "24px 22px 72px" }}>
+      <div style={{ width: "min(1500px, 100%)", margin: "0 auto" }}>
+        <header className="tc-pagehead">
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+            <div style={{ width: 92, height: 50, borderRadius: 10, background: "#fff", padding: 4, display: "grid", placeItems: "center", overflow: "hidden", border: "1px solid var(--border)" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/techcomm-logo.svg" alt="Techcomm Wireless" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            </div>
+            <div>
+              <span className="tc-pagehead-eyebrow"><ShieldCheck size={14} />Control · Super Admin / Admin</span>
+              <h1>Auditoría de llamadas</h1>
+              <p>Consulta llamadas por fecha, teléfono, cédula o cliente, revisa su resultado y reproduce la grabación cuando sea necesario.</p>
+            </div>
+          </div>
+          <div className="tc-pagehead-actions">
+            <Link className="tc-btn tc-btn-secondary" href="/crm"><ArrowLeft />Volver a Techcomm Operations</Link>
+          </div>
+        </header>
 
-      <AuditSearch />
+        <AuditSearch />
+      </div>
     </main>
   );
 }
