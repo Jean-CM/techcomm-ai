@@ -1,17 +1,21 @@
-import { timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
 const MAX_ROWS_PER_REQUEST = 1000;
 const BATCH_SIZE = 500;
+const MAX_BODY_BYTES = 3_500_000;
+const SIGNATURE_TOLERANCE_SECONDS = 5 * 60;
 
 function safeEqual(left: string, right: string) {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
   return a.length === b.length && timingSafeEqual(a, b);
 }
-
+function expectedSignature(secret: string, timestamp: string, rawBody: string) {
+  return `sha256=${createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex")}`;
+}
 function text(value: unknown, max = 500) {
   const normalized = String(value ?? "").trim();
   return normalized ? normalized.slice(0, max) : null;
@@ -34,11 +38,17 @@ function itemType(value: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as null | {
-    source_id?: string;
-    rows?: Array<Record<string, unknown>>;
-    watermark?: string;
-  };
+  const rawBody = await request.text();
+  if (!rawBody || Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+    return NextResponse.json({ ok: false, error: "Payload vacío o demasiado grande." }, { status: 413 });
+  }
+
+  let body: null | { source_id?: string; rows?: Array<Record<string, unknown>>; watermark?: string } = null;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ ok: false, error: "JSON inválido." }, { status: 400 });
+  }
 
   const sourceId = String(body?.source_id ?? "").trim();
   const rows = Array.isArray(body?.rows) ? body.rows : [];
@@ -64,17 +74,52 @@ export async function POST(request: NextRequest) {
   }
 
   const secretRef = String(source.secret_ref ?? "").trim();
-  const expectedSecret = secretRef ? process.env[secretRef] : undefined;
-  if (!secretRef || !expectedSecret) {
+  const secret = secretRef ? process.env[secretRef] : undefined;
+  if (!secretRef || !secret) {
     return NextResponse.json({ ok: false, error: "La credencial de sincronización no está configurada." }, { status: 503 });
   }
-  const authHeader = request.headers.get("authorization") ?? "";
-  const presented = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-  if (!presented || !safeEqual(presented, expectedSecret)) {
+
+  const timestamp = request.headers.get("x-techcomm-timestamp")?.trim() ?? "";
+  const signature = request.headers.get("x-techcomm-signature")?.trim() ?? "";
+  const timestampSeconds = Number(timestamp);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!timestamp || !Number.isFinite(timestampSeconds) || Math.abs(nowSeconds - timestampSeconds) > SIGNATURE_TOLERANCE_SECONDS) {
+    return NextResponse.json({ ok: false, error: "Firma expirada o timestamp inválido." }, { status: 401 });
+  }
+  const expected = expectedSignature(secret, timestamp, rawBody);
+  if (!signature || !safeEqual(signature, expected)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: dataset } = await admin
+    .from("datasets")
+    .select("id")
+    .eq("organization_id", DEFAULT_ORG_ID)
+    .eq("data_source_id", sourceId)
+    .maybeSingle();
+  const { data: job } = dataset
+    ? await admin.from("sync_jobs").select("id").eq("organization_id", DEFAULT_ORG_ID).eq("dataset_id", dataset.id).maybeSingle()
+    : { data: null as null | { id: string } };
+
   const now = new Date().toISOString();
+  let syncRunId: string | null = null;
+  if (job) {
+    const { data: run } = await admin
+      .from("sync_runs")
+      .insert({
+        organization_id: DEFAULT_ORG_ID,
+        sync_job_id: job.id,
+        status: "running",
+        started_at: now,
+        rows_read: rows.length,
+        rows_written: 0,
+        metadata: { source_id: sourceId, transport: "hmac_sha256", watermark: text(body?.watermark, 250) },
+      })
+      .select("id")
+      .single();
+    syncRunId = run?.id ?? null;
+  }
+
   const normalized = rows.map((row) => {
     const sku = text(row.sku ?? row.codigo ?? row.code, 120);
     const name = text(row.name ?? row.nombre ?? row.producto ?? row.pieza, 240);
@@ -116,7 +161,10 @@ export async function POST(request: NextRequest) {
     };
   }).filter((row): row is NonNullable<typeof row> => Boolean(row));
 
-  if (!normalized.length) return NextResponse.json({ ok: false, error: "El lote no contiene filas válidas con SKU y nombre." }, { status: 400 });
+  if (!normalized.length) {
+    if (syncRunId) await admin.from("sync_runs").update({ status: "failed", finished_at: new Date().toISOString(), error_code: "NO_VALID_ROWS", error_message: "El lote no contiene filas válidas." }).eq("id", syncRunId);
+    return NextResponse.json({ ok: false, error: "El lote no contiene filas válidas con SKU y nombre." }, { status: 400 });
+  }
 
   let written = 0;
   for (let start = 0; start < normalized.length; start += BATCH_SIZE) {
@@ -124,12 +172,20 @@ export async function POST(request: NextRequest) {
     const { data, error } = await admin.from("products").upsert(batch, { onConflict: "sku" }).select("id");
     if (error) {
       await admin.from("data_sources").update({ status: "error", updated_at: now }).eq("id", sourceId);
+      if (syncRunId) await admin.from("sync_runs").update({ status: "failed", finished_at: new Date().toISOString(), rows_written: written, error_code: "WRITE_FAILED", error_message: "Falló la escritura de un lote." }).eq("id", syncRunId);
       return NextResponse.json({ ok: false, error: "Falló la escritura del lote.", written }, { status: 500 });
     }
     written += data?.length ?? batch.length;
   }
 
   await admin.from("data_sources").update({ last_sync_at: now, status: "active", updated_at: now }).eq("id", sourceId);
+  if (dataset && body?.watermark) await admin.from("datasets").update({ watermark_value: text(body.watermark, 250), updated_at: now }).eq("id", dataset.id);
+  if (syncRunId) await admin.from("sync_runs").update({
+    status: "succeeded",
+    finished_at: new Date().toISOString(),
+    rows_written: written,
+    metadata: { source_id: sourceId, transport: "hmac_sha256", rejected: rows.length - normalized.length, watermark: text(body?.watermark, 250) },
+  }).eq("id", syncRunId);
 
   return NextResponse.json({
     ok: true,
