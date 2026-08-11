@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { DEFAULT_ORG_ID, requireOrgRole } from "@/lib/require-org-role";
 
 type Payload = {
   id?: string;
@@ -41,6 +41,9 @@ function text(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireOrgRole(["owner", "admin", "manager"]);
+  if (auth.error) return auth.error;
+
   const body = (await request.json().catch(() => ({}))) as Payload;
   if (!body.id) return NextResponse.json({ ok: false, error: "El producto es requerido." }, { status: 400 });
 
@@ -53,6 +56,7 @@ export async function POST(request: Request) {
   const maxDiscount = Math.min(1, amount(body.max_discount_pct));
   const stock = Math.floor(amount(body.stock));
   const reservedStock = Math.min(stock, Math.floor(amount(body.reserved_stock)));
+  const now = new Date().toISOString();
 
   const values = {
     sku: text(body.sku),
@@ -81,15 +85,15 @@ export async function POST(request: Request) {
     installation_price: amount(body.installation_price),
     delivery_price: amount(body.delivery_price),
     installation_includes_delivery: Boolean(body.installation_includes_delivery),
-    last_inventory_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    last_inventory_at: now,
+    updated_at: now,
   };
 
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
+  const { data, error } = await auth.admin!
     .from("products")
     .update(values)
     .eq("id", body.id)
+    .eq("organization_id", DEFAULT_ORG_ID)
     .select()
     .single();
 
