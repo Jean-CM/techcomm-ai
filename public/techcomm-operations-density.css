@@ -1,44 +1,49 @@
 .tcTheme .tc-kpi-grid {
-  gap: 9px;
+  gap: 8px;
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi {
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 11px;
+  gap: 5px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  min-height: 72px;
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi-value {
-  font-size: 26px;
+  font-size: 23px;
+  line-height: .95;
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi-icon svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi-label {
-  font-size: 10.5px;
+  font-size: 9.75px;
+  letter-spacing: .015em;
 }
 
 .tcTheme .tc-kpi-grid .tc-kpi-sub {
-  font-size: 11.5px;
+  font-size: 10.75px;
+  line-height: 1.15;
 }
 
-.tcTheme .tc-kpi-grid .tc-kpi-spark {
-  height: 16px;
+/* Executive density: mini charts are intentionally removed to reduce visual noise. */
+.tcTheme .tc-kpi-spark {
+  display: none !important;
 }
 
 .tcTheme .tc-inventory-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
 }
 
 .tcTheme .tc-inventory-kpis .tc-kpi-action {
@@ -52,10 +57,10 @@
 }
 
 .tcTheme .tc-inventory-kpis .tc-kpi-action .tc-kpi {
-  min-height: 82px;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  min-height: 68px;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 9px;
 }
 
 .tcTheme .tc-inventory-kpis .tc-kpi-action:hover .tc-kpi,
@@ -64,33 +69,42 @@
 }
 
 .tcTheme .tc-inventory-kpis .tc-kpi-label {
-  font-size: 10px;
+  font-size: 9.5px;
 }
 
 .tcTheme .tc-inventory-kpis .tc-kpi-value {
-  font-size: 23px;
+  font-size: 21px;
+  line-height: .95;
 }
 
 .tcTheme .tc-inventory-kpis .tc-kpi-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 23px;
+  height: 23px;
+  border-radius: 6px;
 }
 
 .tcTheme .tc-inventory-kpis .tc-kpi-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 .tcTheme .tc-inventory-kpis .tc-kpi-sub {
-  font-size: 10.75px;
-  line-height: 1.2;
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+/* Presentation profile visibility: privileged Control links remain protected
+   server-side and are also hidden in non-admin preview profiles. */
+.tcTheme aside:has(select.tc-select option[value="secretary"]:checked) nav > div:has(a[href="/admin/auditoria"]),
+.tcTheme aside:has(select.tc-select option[value="supervisor"]:checked) nav > div:has(a[href="/admin/auditoria"]),
+.tcTheme aside:has(select.tc-select option[value="technician"]:checked) nav > div:has(a[href="/admin/auditoria"]) {
+  display: none !important;
 }
 
 .tcTheme .tc-inventory-table th,
 .tcTheme .tc-inventory-table td {
-  padding-top: 9px;
-  padding-bottom: 9px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .tcTheme .tc-inventory-table thead th {
@@ -108,7 +122,7 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 10px 14px;
+  padding: 9px 12px;
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
@@ -119,17 +133,20 @@
   white-space: nowrap;
 }
 
-@media (max-width: 1360px) {
+@media (max-width: 1450px) {
   .tcTheme .tc-inventory-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 760px) {
-  .tcTheme .tc-inventory-kpis {
+@media (max-width: 1200px) {
+  .tcTheme .tc-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
+@media (max-width: 760px) {
+  .tcTheme .tc-inventory-kpis,
   .tcTheme .tc-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
