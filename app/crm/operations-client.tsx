@@ -16,11 +16,12 @@ import {
   type Tone,
 } from "@/components/tc-ui";
 import InventoryPanel from "@/components/inventory-panel";
+import QuotePanel from "@/components/quote-panel";
 
 const INACTIVITY_LIMIT_MS = 5 * 60 * 1000;
 
 type Role = "super_admin" | "admin" | "secretary" | "supervisor" | "technician";
-type Permission = "edit_customer" | "edit_technician" | "edit_product" | "reschedule" | "reassign" | "update_order" | "manual_management" | "view_financial";
+type Permission = "edit_customer" | "edit_technician" | "edit_product" | "reschedule" | "reassign" | "update_order" | "manual_management" | "view_financial" | "manage_quotes";
 
 type Customer = { id:string; full_name?:string|null; phone:string; email?:string|null; address?:string|null; sector?:string|null; source?:string|null; created_at?:string; updated_at?:string };
 type Product = { id:string; sku?:string|null; name:string; piece_name?:string|null; description?:string|null; item_type?:string|null; category?:string|null; brand?:string|null; model?:string|null; unit_cost?:number|null; sale_price?:number|null; price?:number|null; max_discount_pct?:number|null; minimum_authorized_price?:number|null; installation_price?:number|null; delivery_price?:number|null; installation_includes_delivery?:boolean|null; stock:number; reserved_stock:number; active?:boolean };
@@ -49,9 +50,9 @@ type ModalState =
 const EMPTY: Overview = { ok:true, customers:[], products:[], technicians:[], appointments:[], work_orders:[], quotes:[], sales:[], call_events:[], call_reminders:[] };
 
 const ROLE_META: Record<Role,{label:string;description:string;menus:string[];permissions:Permission[]}> = {
-  super_admin:{ label:"Super Admin", description:"Control total del CRM, operación y configuración.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial"] },
-  admin:{ label:"Administrador", description:"Administración operativa completa sin configuración sensible.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial"] },
-  secretary:{ label:"Secretaría", description:"Atención de clientes, agenda, reprogramaciones y gestiones presenciales.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Cotizaciones"], permissions:["edit_customer","reschedule","manual_management"] },
+  super_admin:{ label:"Super Admin", description:"Control total del CRM, operación y configuración.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes"] },
+  admin:{ label:"Administrador", description:"Administración operativa completa sin configuración sensible.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes"] },
+  secretary:{ label:"Secretaría", description:"Atención de clientes, agenda, reprogramaciones y gestiones presenciales.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Cotizaciones"], permissions:["edit_customer","reschedule","manual_management","manage_quotes"] },
   supervisor:{ label:"Supervisor técnico", description:"Citas, técnicos, órdenes, pendientes y reasignaciones.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos"], permissions:["edit_technician","reschedule","reassign","update_order"] },
   technician:{ label:"Técnico (vista previa)", description:"Así se ve la operación desde el punto de vista de un técnico — solo su agenda y sus órdenes. Los técnicos reales usan su propio portal en /tecnico, no el CRM.", menus:["Dashboard","Agenda y Órdenes"], permissions:[] },
 };
@@ -189,19 +190,15 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
   const unassigned=data.appointments.filter(item=>!item.technician_id).length;
   const todayAppointments=data.appointments.filter(item=>item.starts_at.startsWith(today)).length;
   const availableTechs=data.technicians.filter(item=>item.status==="available").length;
-  const pendingQuotes=data.quotes.filter(item=>["pending","sent","draft"].includes(item.status)).length;
+  const pendingQuotes=data.quotes.filter(item=>["pending","sent","draft","pending_approval","review_requested"].includes(item.status)).length;
   const outOfStock=data.products.filter(item=>Math.max(0,item.stock-item.reserved_stock)<=0).length;
   const salesTotal=data.sales.reduce((sum,item)=>sum+(item.unit_price||0)*(item.quantity||0),0);
-
-  const last7=useMemo(()=>[...Array(7)].map((_,i)=>{ const d=new Date(); d.setDate(d.getDate()-(6-i)); return d.toISOString().slice(0,10); }),[]);
-  const convSpark=useMemo(()=>last7.map(day=>data.call_events.filter(event=>String(event.created_at).slice(0,10)===day).length),[last7,data.call_events]);
-  const apptSpark=useMemo(()=>last7.map(day=>data.appointments.filter(item=>item.starts_at.slice(0,10)===day).length),[last7,data.appointments]);
 
   const nowMs=Date.now();
   const upcomingVisits=useMemo(()=>[...data.appointments].filter(item=>new Date(item.starts_at).getTime()>=nowMs-3600000).sort((a,b)=>a.starts_at.localeCompare(b.starts_at)).slice(0,5),[data.appointments,nowMs]);
   const ordersNeedingAttention=useMemo(()=>data.work_orders.filter(item=>(!item.technician_id||["pending_customer","on_hold"].includes(item.status))&&!["completed","cancelled"].includes(item.status)).slice(0,6),[data.work_orders]);
   const recentConversations=data.call_events.slice(0,5);
-  const pendingQuotesList=useMemo(()=>data.quotes.filter(item=>["pending","sent","draft"].includes(item.status)).slice(0,5),[data.quotes]);
+  const pendingQuotesList=useMemo(()=>data.quotes.filter(item=>["pending","sent","draft","pending_approval","review_requested"].includes(item.status)).slice(0,5),[data.quotes]);
 
   async function post(url:string,body:Record<string,unknown>){
     const response=await fetch(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...body,actor_name:"Jean Carlos Mateo",actor_role:role})});
@@ -288,7 +285,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
             );
           })}
 
-          {canOpenAudit && (
+          {canOpenAudit && (role==="super_admin" || role==="admin") && (
             <div className={styles.navGroup}>
               <span className={styles.navGroupLabel}>Control</span>
               <Link className={`${styles.navItem} ${styles.navLink}`} href="/admin/auditoria"><ShieldCheck /><span className={styles.navLabel}>Auditoría</span><span className={styles.tip}>Auditoría</span></Link>
@@ -330,14 +327,14 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
           ):(<>
             {active==="Dashboard"&&<>
               <div className="tc-kpi-grid">
-                <Kpi label="Conversaciones" value={data.call_events.length} icon={<MessagesSquare/>} tone="accent" spark={convSpark} sub={<><MessageCircle size={13}/>WhatsApp y llamadas</>} />
-                <Kpi label="Citas de hoy" value={todayAppointments} icon={<CalendarClock/>} tone="info" spark={apptSpark} sub={<>{data.appointments.length} en agenda</>} />
-                <Kpi label="Órdenes activas" value={activeOrders} icon={<ClipboardList/>} tone="accent" sub={<>{data.work_orders.length} totales</>} />
-                <Kpi label="Pendientes de asignación" value={unassigned} icon={<AlertTriangle/>} tone={unassigned?"warning":"good"} sub={<>Requieren técnico</>} />
-                <Kpi label="Técnicos disponibles" value={`${availableTechs}/${data.technicians.length}`} icon={<Wrench/>} tone="good" sub={<>En el equipo de campo</>} />
-                <Kpi label="Cotizaciones pendientes" value={pendingQuotes} icon={<FileText/>} tone="info" sub={<>{data.quotes.length} totales</>} />
-                <Kpi label="Ventas" value={data.sales.length} icon={<ShoppingCart/>} tone="good" sub={<>{money(salesTotal)}</>} />
-                <Kpi label="Alertas de inventario" value={outOfStock} icon={<Package/>} tone={outOfStock?"bad":"good"} sub={<>Sin stock disponible</>} />
+                {(role==="super_admin"||role==="admin"||role==="secretary")&&<Kpi label="Conversaciones" value={data.call_events.length} icon={<MessagesSquare/>} tone="accent" sub={<><MessageCircle size={13}/>WhatsApp y llamadas</>} />}
+                <Kpi label="Citas de hoy" value={todayAppointments} icon={<CalendarClock/>} tone="info" sub={<>{data.appointments.length} en agenda</>} />
+                {(role==="super_admin"||role==="admin"||role==="supervisor"||role==="technician")&&<Kpi label="Órdenes activas" value={activeOrders} icon={<ClipboardList/>} tone="accent" sub={<>{data.work_orders.length} totales</>} />}
+                {(role==="super_admin"||role==="admin"||role==="supervisor")&&<Kpi label="Pendientes de asignación" value={unassigned} icon={<AlertTriangle/>} tone={unassigned?"warning":"good"} sub={<>Requieren técnico</>} />}
+                {(role==="super_admin"||role==="admin"||role==="supervisor")&&<Kpi label="Técnicos disponibles" value={`${availableTechs}/${data.technicians.length}`} icon={<Wrench/>} tone="good" sub={<>En el equipo de campo</>} />}
+                {(role==="super_admin"||role==="admin"||role==="secretary")&&<Kpi label="Cotizaciones pendientes" value={pendingQuotes} icon={<FileText/>} tone="info" sub={<>{data.quotes.length} totales</>} />}
+                {(role==="super_admin"||role==="admin")&&<Kpi label="Ventas" value={data.sales.length} icon={<ShoppingCart/>} tone="good" sub={<>{money(salesTotal)}</>} />}
+                {(role==="super_admin"||role==="admin")&&<Kpi label="Alertas de inventario" value={outOfStock} icon={<Package/>} tone={outOfStock?"bad":"good"} sub={<>Sin stock disponible</>} />}
               </div>
 
               <div className={styles.dashGrid}>
@@ -350,32 +347,32 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
                   )):<EmptyState title="Sin visitas próximas" message="No hay citas programadas por ahora." icon={<CalendarClock size={20}/>} />}
                 </SectionCard>
 
-                <SectionCard eyebrow="Requiere atención" title="Órdenes por gestionar" onOpen={ROLE_META[role].menus.includes("Agenda y Órdenes")?()=>goto("Agenda y Órdenes"):undefined}>
+                {(role==="super_admin"||role==="admin"||role==="supervisor"||role==="technician")&&<SectionCard eyebrow="Requiere atención" title="Órdenes por gestionar" onOpen={ROLE_META[role].menus.includes("Agenda y Órdenes")?()=>goto("Agenda y Órdenes"):undefined}>
                   {ordersNeedingAttention.length?ordersNeedingAttention.map(item=>(
                     <div className={styles.listRow} key={item.id}>
                       <div className={styles.listMain}><strong>{item.order_number} · {customersById.get(item.customer_id||"")?.full_name||"Sin nombre"}</strong><span>{item.issue||item.equipment||"Sin detalle"}</span></div>
                       <div className={styles.listMeta}>{item.technician_id?<StatusBadge tone={toneFor(item.status)}>{statusLabel(item.status)}</StatusBadge>:<StatusBadge tone="warning">Sin técnico</StatusBadge>}</div>
                     </div>
                   )):<EmptyState title="Todo en orden" message="Ninguna orden requiere atención inmediata." icon={<CheckCircle2 size={20}/>} />}
-                </SectionCard>
+                </SectionCard>}
 
-                <SectionCard eyebrow="Actividad" title="Conversaciones recientes" onOpen={ROLE_META[role].menus.includes("Conversaciones")?()=>goto("Conversaciones"):undefined}>
+                {(role==="super_admin"||role==="admin"||role==="secretary"||role==="supervisor")&&<SectionCard eyebrow="Actividad" title="Conversaciones recientes" onOpen={ROLE_META[role].menus.includes("Conversaciones")?()=>goto("Conversaciones"):undefined}>
                   {recentConversations.length?recentConversations.map(item=>{const customer=customersByPhone.get(cleanPhone(item.customer_phone));return(
                     <div className={styles.listRow} key={item.id}>
                       <div className={styles.listMain}><strong>{customer?.full_name||"Sin nombre registrado"}</strong><span>{item.summary||"Sin resumen"}</span></div>
                       <div className={styles.listMeta}><StatusBadge tone={channel(item)==="WhatsApp"?"good":"info"} plain>{channel(item)}</StatusBadge><div style={{marginTop:4}}>{localDate(item.created_at)}</div></div>
                     </div>
                   );}):<EmptyState title="Sin actividad" message="Aún no hay conversaciones registradas." icon={<MessagesSquare size={20}/>} />}
-                </SectionCard>
+                </SectionCard>}
 
-                <SectionCard eyebrow="Comercial" title="Cotizaciones pendientes" onOpen={ROLE_META[role].menus.includes("Cotizaciones")?()=>goto("Cotizaciones"):undefined}>
+                {(role==="super_admin"||role==="admin"||role==="secretary")&&<SectionCard eyebrow="Comercial" title="Cotizaciones pendientes" onOpen={ROLE_META[role].menus.includes("Cotizaciones")?()=>goto("Cotizaciones"):undefined}>
                   {pendingQuotesList.length?pendingQuotesList.map(item=>(
                     <div className={styles.listRow} key={item.id}>
                       <div className={styles.listMain}><strong>{item.quote_number} · {customersById.get(item.customer_id||"")?.full_name||"Sin nombre"}</strong><span>{money(item.total)}</span></div>
                       <div className={styles.listMeta}><StatusBadge tone={toneFor(item.status)}>{statusLabel(item.status)}</StatusBadge></div>
                     </div>
                   )):<EmptyState title="Sin cotizaciones" message="No hay cotizaciones pendientes." icon={<FileText size={20}/>} />}
-                </SectionCard>
+                </SectionCard>}
               </div>
             </>}
 
@@ -480,25 +477,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
 
             {active==="Inventario"&&<InventoryPanel canEdit={can("edit_product")} />}
 
-            {active==="Cotizaciones"&&<div className="tc-card">
-              <div className="tc-card-head"><div><span className="tc-card-title-eyebrow">Comercial</span><h3>Cotizaciones</h3></div><StatusBadge tone="neutral" plain>{data.quotes.length} registros</StatusBadge></div>
-              <div className="tc-tablewrap tc-scroll">
-                <table className="tc-table">
-                  <thead><tr><th>Cotización</th><th>Cliente</th><th className="tc-num">Total</th><th>Estado</th><th>Creada</th><th>Vence</th></tr></thead>
-                  <tbody>{data.quotes.map(item=>(
-                    <tr key={item.id}>
-                      <td className="tc-mono">{item.quote_number}</td>
-                      <td>{customersById.get(item.customer_id||"")?.full_name||"Sin nombre"}</td>
-                      <td className="tc-num tc-strong">{money(item.total)}</td>
-                      <td><StatusBadge tone={toneFor(item.status)}>{statusLabel(item.status)}</StatusBadge></td>
-                      <td>{localDate(item.created_at)}</td>
-                      <td>{item.expires_at?localDate(item.expires_at):"—"}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-                {!data.quotes.length&&<EmptyState title="Sin cotizaciones" message="Aún no hay cotizaciones registradas." icon={<FileText size={20}/>} />}
-              </div>
-            </div>}
+            {active==="Cotizaciones"&&<QuotePanel customers={data.customers} canManage={can("manage_quotes")} canApprove={canOpenAudit&&(role==="super_admin"||role==="admin")} />}
 
             {active==="Ventas"&&<div className="tc-card">
               <div className="tc-card-head"><div><span className="tc-card-title-eyebrow">Resultados</span><h3>Ventas</h3></div><StatusBadge tone="neutral" plain>{money(salesTotal)}</StatusBadge></div>
