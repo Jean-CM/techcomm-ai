@@ -22,8 +22,10 @@ export async function GET() {
   }
 
   const org = DEFAULT_ORG_ID;
-  const [customers, appointments, orders, quotes, sales, technicians, conversations, reminders, inventorySummary] = await Promise.all([
+  const [customers, outProducts, appointments, orders, quotes, sales, technicians, conversations, reminders, inventorySummary] = await Promise.all([
     supabase.from("customers").select("id,full_name,phone,email,address,sector,source,created_at,updated_at").eq("organization_id", org).order("created_at", { ascending: false }).limit(500),
+    // Compact lookup used only by the current Dashboard alert while the client migrates to inventory_summary.
+    supabase.from("products").select("id,name,stock,reserved_stock").eq("organization_id", org).eq("active", true).eq("inventory_status", "out").limit(5000),
     supabase.from("appointments").select("id,customer_id,technician_id,starts_at,ends_at,address,status,confirmation_status,technician_confirmation_status,technician_confirmation_at,requires_manual_assignment,notes,created_at,updated_at").eq("organization_id", org).order("starts_at", { ascending: true }).limit(500),
     supabase.from("work_orders").select("id,order_number,order_type,customer_id,appointment_id,technician_id,equipment,brand,model,issue,status,priority,source,visit_fee,visit_fee_creditable,visit_fee_applied_to_invoice,customer_repair_approved,customer_repair_approved_at,quote_id,created_at,updated_at").eq("organization_id", org).order("created_at", { ascending: false }).limit(500),
     supabase.from("quotes").select("id,quote_number,customer_id,work_order_id,status,total,created_at,expires_at").eq("organization_id", org).order("created_at", { ascending: false }).limit(250),
@@ -34,7 +36,7 @@ export async function GET() {
     supabase.rpc("get_inventory_summary", { p_organization_id: org }).single(),
   ]);
 
-  const firstErrors = [customers, appointments, orders, quotes, sales, technicians, conversations, reminders, inventorySummary]
+  const firstErrors = [customers, outProducts, appointments, orders, quotes, sales, technicians, conversations, reminders, inventorySummary]
     .map((result) => result.error?.message)
     .filter(Boolean);
 
@@ -43,7 +45,7 @@ export async function GET() {
   }
 
   // The full inventory is intentionally not part of the overview payload.
-  // Only resolve product names referenced by the recent sales shown in the CRM.
+  // Resolve only products referenced by recent sales, then merge compact out-of-stock rows.
   const saleProductIds = Array.from(new Set((sales.data ?? []).map((row) => row.product_id).filter((id): id is string => Boolean(id))));
   const productLookup = saleProductIds.length
     ? await supabase.from("products")
@@ -55,6 +57,9 @@ export async function GET() {
   if (productLookup.error) {
     return NextResponse.json({ ok: false, errors: [productLookup.error.message] }, { status: 500 });
   }
+
+  const productMap = new Map<string, { id: string; name: string; stock: number; reserved_stock: number }>();
+  for (const product of [...(productLookup.data ?? []), ...(outProducts.data ?? [])]) productMap.set(product.id, product);
 
   const customersById = new Map((customers.data ?? []).map((customer) => [customer.id, customer]));
 
@@ -74,7 +79,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     customers: customers.data ?? [],
-    products: productLookup.data ?? [],
+    products: Array.from(productMap.values()),
     appointments: appointments.data ?? [],
     work_orders: orders.data ?? [],
     quotes: quotes.data ?? [],
