@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { DEFAULT_ORG_ID, requireOrgRole } from "@/lib/require-org-role";
 
 type Row = Record<string, unknown>;
 type ItemType = "product" | "equipment" | "part" | "accessory";
@@ -49,6 +49,9 @@ function extractRows(sheet: XLSX.WorkSheet): Row[] {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireOrgRole(["owner", "admin", "manager"]);
+  if (auth.error) return auth.error;
+
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No se recibió el archivo." }, { status: 400 });
@@ -85,7 +88,9 @@ export async function POST(request: Request) {
     const reserved = Math.max(0, Math.min(stock, Math.floor(num(row.stock_reservado || row.reservado))));
     const rawSku = text(row.sku || row.codigo || row.codigo_interno);
     const sku = rawSku || `IMP-${slug(brand || "GEN")}-${slug(model || "SIN-MODELO")}-${slug(name || String(index + 1))}`;
+    const now = new Date().toISOString();
     return {
+      organization_id: DEFAULT_ORG_ID,
       sku,
       barcode: text(row.barcode || row.codigo_barra || row.codigo_barras) || null,
       name,
@@ -111,18 +116,17 @@ export async function POST(request: Request) {
       lot_tracking: bool(row.control_lote || row.lote),
       warranty_days: Math.max(0, Math.floor(num(row.garantia_dias))),
       active: !["inactivo", "descontinuado"].includes(text(row.estado).toLowerCase()),
-      last_inventory_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      last_inventory_at: now,
+      updated_at: now,
     };
   }).filter((row) => row.name);
 
   if (!valid.length) return NextResponse.json({ ok: false, error: "No se encontraron filas válidas." }, { status: 400 });
-  const supabase = getSupabaseAdmin();
   const BATCH_SIZE = 500;
   let imported = 0;
   for (let start = 0; start < valid.length; start += BATCH_SIZE) {
     const batch = valid.slice(start, start + BATCH_SIZE);
-    const { data, error } = await supabase.from("products").upsert(batch, { onConflict: "sku" }).select("id");
+    const { data, error } = await auth.admin!.from("products").upsert(batch, { onConflict: "sku" }).select("id");
     if (error) return NextResponse.json({ ok: false, error: error.message, imported }, { status: 500 });
     imported += data?.length ?? batch.length;
   }
