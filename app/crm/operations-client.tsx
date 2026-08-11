@@ -106,6 +106,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
   const [statusFilter,setStatusFilter]=useState("all");
   const [secondaryFilter,setSecondaryFilter]=useState("all");
   const [orderTypeFilter,setOrderTypeFilter]=useState("all");
+  const [orderMaterials,setOrderMaterials]=useState<{id:string;product_name:string;quantity:number;unit_price:number|null;is_additional_purchase:boolean}[]|null>(null);
   const [dateFilter,setDateFilter]=useState("");
   const [collapsed,setCollapsed]=useState(false);
   const [mobileOpen,setMobileOpen]=useState(false);
@@ -467,7 +468,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
                       <td><div className="tc-truncate">{appt?.address||customer?.address||"Sin dirección"}</div></td>
                       <td>{tech?tech.full_name:<StatusBadge tone="warning">Sin técnico</StatusBadge>}</td>
                       <td><StatusBadge tone={toneFor(item.status)}>{statusLabel(item.status)}</StatusBadge></td>
-                      <td><div className="tc-rowactions">{can("update_order")&&<button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" onClick={()=>setModal({kind:"order",item})}>Gestionar</button>}{appt&&can("reschedule")&&<button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={()=>setModal({kind:"appointment",item:appt})}>Cita</button>}</div></td>
+                      <td><div className="tc-rowactions">{can("update_order")&&<button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" onClick={()=>{setModal({kind:"order",item});setOrderMaterials(null);fetch(`/api/crm/orders/${item.id}/materials`).then(r=>r.json()).then(p=>setOrderMaterials(p.materials||[])).catch(()=>setOrderMaterials([]));}}>Gestionar</button>}{appt&&can("reschedule")&&<button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={()=>setModal({kind:"appointment",item:appt})}>Cita</button>}</div></td>
                     </tr>
                   );})}</tbody>
                 </table>
@@ -573,6 +574,15 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
             <label>Estado<select className="tc-select" name="status" defaultValue={modal.item.status}>{["new","scheduled","assigned","in_progress","pending_customer","approved","on_hold","completed","cancelled"].map(value=><option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
             <label>Prioridad<select className="tc-select" name="priority" defaultValue={modal.item.priority||"normal"}><option value="low">Baja</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
             <label className="tc-full">Técnico<select className="tc-select" name="technician_id" defaultValue={modal.item.technician_id||""}><option value="">Sin técnico</option>{data.technicians.map(item=><option key={item.id} value={item.id}>{item.full_name} · {statusLabel(item.status)}</option>)}</select></label>
+            <div className="tc-full tc-notice">
+              <strong style={{display:"block",marginBottom:6}}>Piezas y productos registrados por el técnico</strong>
+              {orderMaterials===null?<span className="muted">Cargando...</span>:orderMaterials.length===0?<span className="muted">Ninguno registrado todavía.</span>:orderMaterials.map(m=>
+                <div key={m.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
+                  <span>{m.quantity}× {m.product_name}{m.is_additional_purchase?" — compra adicional (cotización enviada)":""}</span>
+                  {m.unit_price!=null&&<span className="muted">RD${(m.unit_price*m.quantity).toLocaleString("es-DO")}</span>}
+                </div>
+              )}
+            </div>
           </div>}
           {modal?.kind==="manual"&&<ManualFields customers={data.customers} technicians={data.technicians}/>}
           <div className="tc-form-actions"><button type="button" className="tc-btn tc-btn-ghost" onClick={closeOverlay}>Cancelar</button><button type="submit" className="tc-btn">Guardar</button></div>
