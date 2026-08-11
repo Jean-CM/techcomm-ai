@@ -6,7 +6,7 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp";
 const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
 
 const WARRANTY_POLICY_PLACEHOLDER =
-  "[Texto temporal — pendiente de confirmar con la empresa] Su reparación cuenta con garantía de 30 días sobre la pieza reemplazada y la mano de obra. Si el equipo presenta la misma falla dentro de ese periodo, la revisión es sin costo adicional. Para reembolsos, contacte a Techcomm Wireless dentro de las 48 horas posteriores al servicio.";
+  "Garantía Techcomm: 30 días a partir de la entrega del equipo, cubriendo la misma reparación realizada. Fuera de este periodo, o si el equipo presenta maltrato, rotura, humedad, o intervención de un taller no autorizado, el servicio se considera fuera de garantía. Si su equipo tiene garantía de fábrica, tienda o distribuidor vigente, contáctenos para validar cuál aplica a su caso.";
 
 async function requireTechnician(request: Request) {
   const supabase = await createClient().catch(() => null);
@@ -159,6 +159,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const { error } = await admin!.from("work_orders").update(updates).eq("id", order.id);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+  if (body.action === "termino") {
+    const { data: orderWithAppointment } = await admin!.from("work_orders").select("appointment_id").eq("id", order.id).maybeSingle();
+    if (orderWithAppointment?.appointment_id) {
+      await admin!.from("appointments").update({ status: "completed", updated_at: now }).eq("id", orderWithAppointment.appointment_id);
+    }
+  }
 
   if (body.action === "termino" && order.customer_id) {
     const { data: customer } = await admin!.from("customers").select("full_name,phone").eq("id", order.customer_id).maybeSingle();

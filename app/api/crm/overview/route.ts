@@ -12,7 +12,7 @@ export async function GET() {
     supabase.from("quotes").select("id,quote_number,customer_id,work_order_id,status,subtotal,tax,total,discount_amount,discount_pct,installation_included,installation_amount,delivery_included,delivery_amount,approval_required,accepted_by_customer,accepted_at,customer_name_snapshot,customer_phone_snapshot,notes,created_at,expires_at").order("created_at", { ascending: false }).limit(250),
     supabase.from("sales").select("id,customer_id,product_id,quantity,unit_price,status,source,created_at").order("created_at", { ascending: false }).limit(250),
     supabase.from("technicians").select("id,full_name,phone,specialties,zones,status,active,whatsapp_enabled,notification_status,created_at").eq("active", true).order("full_name", { ascending: true }).limit(250),
-    supabase.from("call_events").select("id,conversation_id,agent_id,event_type,status,customer_phone,order_id,summary,transcript,analysis,metadata,created_at").order("created_at", { ascending: false }).limit(250),
+    supabase.from("call_events").select("id,conversation_id,agent_id,event_type,status,customer_phone,order_id,summary,metadata,created_at").order("created_at", { ascending: false }).limit(250),
     supabase.from("call_reminders").select("id,appointment_id,scheduled_for,status,provider,external_conversation_id,result,attempts,call_type,customer_phone,customer_name,appointment_starts_at,last_error,processed_at,created_at,updated_at").order("scheduled_for", { ascending: false }).limit(250),
   ]);
 

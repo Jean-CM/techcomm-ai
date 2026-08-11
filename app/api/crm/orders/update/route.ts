@@ -82,6 +82,17 @@ export async function POST(request: Request) {
     }).eq("id", current.appointment_id);
   }
 
+  // The appointment's own status was never syncing with the order's status -
+  // marking an order "completed" left its appointment stuck showing
+  // "Programada" everywhere (dashboard, agenda), which looked like the work
+  // was still pending even though it was done.
+  if (current.appointment_id && body.status && ["completed", "cancelled"].includes(body.status)) {
+    await supabase.from("appointments").update({
+      status: body.status,
+      updated_at: new Date().toISOString(),
+    }).eq("id", current.appointment_id);
+  }
+
   await supabase.from("crm_audit_log").insert({
     entity_type: "work_orders",
     entity_id: body.id,
