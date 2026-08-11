@@ -42,6 +42,14 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ ok: true, movements: data ?? [] });
 }
 
+function movementError(message: string) {
+  if (message.includes("PRODUCT_NOT_FOUND")) return [404, "Producto no encontrado."] as const;
+  if (message.includes("INSUFFICIENT_AVAILABLE_STOCK")) return [409, "La salida supera el stock disponible no reservado."] as const;
+  if (message.includes("INSUFFICIENT_STOCK_TO_RESERVE")) return [409, "La reserva supera el stock disponible."] as const;
+  if (message.includes("INVALID_QUANTITY") || message.includes("INVALID_MOVEMENT_TYPE")) return [400, "Movimiento o cantidad inválida."] as const;
+  return [500, "No fue posible registrar el movimiento de inventario."] as const;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireWriter();
   if (auth.error) return auth.error;
@@ -62,66 +70,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Producto, tipo de movimiento y cantidad válida son requeridos." }, { status: 400 });
   }
 
-  const { data: product, error: productError } = await auth.admin!
-    .from("products")
-    .select("id,stock,reserved_stock,pending_stock")
-    .eq("organization_id", DEFAULT_ORG_ID)
-    .eq("id", productId)
-    .single();
-  if (productError || !product) return NextResponse.json({ ok: false, error: "Producto no encontrado." }, { status: 404 });
+  const { data, error } = await auth.admin!.rpc("apply_inventory_movement", {
+    p_organization_id: DEFAULT_ORG_ID,
+    p_product_id: productId,
+    p_movement_type: movementType,
+    p_quantity: quantity,
+    p_reference_type: String(body.reference_type ?? "").slice(0, 80) || null,
+    p_reference_id: String(body.reference_id ?? "").slice(0, 120) || null,
+    p_note: String(body.note ?? "").slice(0, 500) || null,
+    p_created_by: auth.user!.id,
+  });
 
-  const before = { stock: product.stock, reserved: product.reserved_stock, pending: product.pending_stock };
-  let stock = before.stock;
-  let reserved = before.reserved;
-  let pending = before.pending;
-
-  if (["receipt", "return", "transfer_in"].includes(movementType)) stock += quantity;
-  if (["issue", "transfer_out"].includes(movementType)) {
-    if (quantity > Math.max(0, stock - reserved)) return NextResponse.json({ ok: false, error: "La salida supera el stock disponible no reservado." }, { status: 409 });
-    stock -= quantity;
-  }
-  if (movementType === "reserve") {
-    if (reserved + quantity > stock) return NextResponse.json({ ok: false, error: "La reserva supera el stock total." }, { status: 409 });
-    reserved += quantity;
-  }
-  if (movementType === "release") reserved = Math.max(0, reserved - quantity);
-  if (movementType === "pending_add") pending += quantity;
-  if (movementType === "pending_cancel") pending = Math.max(0, pending - quantity);
-  if (movementType === "pending_receive") {
-    const received = Math.min(quantity, pending);
-    pending -= received;
-    stock += received;
+  if (error) {
+    const [status, friendly] = movementError(error.message);
+    return NextResponse.json({ ok: false, error: friendly }, { status });
   }
 
-  const now = new Date().toISOString();
-  const { error: updateError } = await auth.admin!
-    .from("products")
-    .update({ stock, reserved_stock: Math.min(reserved, stock), pending_stock: pending, last_inventory_at: now, updated_at: now })
-    .eq("id", productId)
-    .eq("organization_id", DEFAULT_ORG_ID);
-  if (updateError) return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 });
-
-  const { data: movement, error: movementError } = await auth.admin!
-    .from("inventory_movements")
-    .insert({
-      organization_id: DEFAULT_ORG_ID,
-      product_id: productId,
-      movement_type: movementType,
-      quantity,
-      stock_before: before.stock,
-      stock_after: stock,
-      reserved_before: before.reserved,
-      reserved_after: Math.min(reserved, stock),
-      pending_before: before.pending,
-      pending_after: pending,
-      reference_type: String(body.reference_type ?? "").slice(0, 80) || null,
-      reference_id: String(body.reference_id ?? "").slice(0, 120) || null,
-      note: String(body.note ?? "").slice(0, 500) || null,
-      created_by: auth.user!.id,
-    })
-    .select("id,created_at")
-    .single();
-  if (movementError) return NextResponse.json({ ok: false, error: movementError.message }, { status: 500 });
-
-  return NextResponse.json({ ok: true, movement, product: { id: productId, stock, reserved_stock: Math.min(reserved, stock), pending_stock: pending, available_stock: Math.max(0, stock - reserved) } });
+  const result = Array.isArray(data) ? data[0] : data;
+  return NextResponse.json({
+    ok: true,
+    movement: result ? { id: result.movement_id, created_at: result.created_at } : null,
+    product: result ? {
+      id: result.product_id,
+      stock: result.stock,
+      reserved_stock: result.reserved_stock,
+      pending_stock: result.pending_stock,
+      available_stock: result.available_stock,
+    } : null,
+  });
 }
