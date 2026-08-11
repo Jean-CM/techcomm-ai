@@ -5,6 +5,20 @@ const QUOTE_ROLES = ["owner", "admin", "manager", "agent"] as const;
 const PAGE_SIZE_DEFAULT = 50;
 const PAGE_SIZE_MAX = 100;
 
+type QuoteSummaryRow = {
+  total?: number | string | null;
+  draft?: number | string | null;
+  pending_approval?: number | string | null;
+  sent?: number | string | null;
+  accepted?: number | string | null;
+  rejected?: number | string | null;
+  review_requested?: number | string | null;
+  cancelled?: number | string | null;
+  expired?: number | string | null;
+  active_value?: number | string | null;
+  accepted_value?: number | string | null;
+};
+
 function clean(value: string) {
   return value.trim().replace(/[,%()]/g, " ").replace(/\s+/g, " ").slice(0, 100);
 }
@@ -42,7 +56,7 @@ export async function GET(request: NextRequest) {
   if (rows.error) return NextResponse.json({ ok: false, error: rows.error.message }, { status: 500 });
   if (summaryResult.error) return NextResponse.json({ ok: false, error: summaryResult.error.message }, { status: 500 });
 
-  const raw = summaryResult.data ?? {};
+  const raw = (summaryResult.data ?? {}) as QuoteSummaryRow;
   const summary = {
     total: Number(raw.total || 0),
     draft: Number(raw.draft || 0),
