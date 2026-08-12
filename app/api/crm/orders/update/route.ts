@@ -8,6 +8,7 @@ type Payload = {
   priority?: string;
   warranty_type?: string;
   distance_km?: number | null;
+  required_part_id?: string | null;
   actor_name?: string;
   actor_role?: string;
 };
@@ -80,6 +81,16 @@ export async function POST(request: Request) {
 
   if (body.distance_km !== undefined) {
     values.distance_km = body.distance_km;
+  }
+
+  if (body.required_part_id !== undefined) {
+    values.required_part_id = body.required_part_id || null;
+    if (body.required_part_id) {
+      const { data: part } = await supabase.from("products").select("available_stock,inventory_status").eq("id", body.required_part_id).maybeSingle();
+      values.parts_procurement_needed = Boolean(part && (part.inventory_status === "out" || (part.available_stock ?? 0) <= 0));
+    } else {
+      values.parts_procurement_needed = false;
+    }
   }
 
   const { data: order, error } = await supabase

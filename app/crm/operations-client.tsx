@@ -107,6 +107,9 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
   const [secondaryFilter,setSecondaryFilter]=useState("all");
   const [orderTypeFilter,setOrderTypeFilter]=useState("all");
   const [orderMaterials,setOrderMaterials]=useState<{id:string;product_name:string;quantity:number;unit_price:number|null;is_additional_purchase:boolean}[]|null>(null);
+  const [partQuery,setPartQuery]=useState("");
+  const [partResults,setPartResults]=useState<{id:string;name:string;available_stock:number;inventory_status:string}[]>([]);
+  const [requiredPart,setRequiredPart]=useState<{id:string;name:string;available_stock:number;inventory_status:string}|null>(null);
   const [dateFilter,setDateFilter]=useState("");
   const [collapsed,setCollapsed]=useState(false);
   const [mobileOpen,setMobileOpen]=useState(false);
@@ -139,6 +142,16 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
   },[]);
   useEffect(()=>{ if(!ROLE_META[role].menus.includes(active))setActive(ROLE_META[role].menus[0]); },[role,active]);
   useEffect(()=>{ setSearch("");setStatusFilter("all");setSecondaryFilter("all");setDateFilter("");setOrderTypeFilter("all"); },[active]);
+  useEffect(()=>{
+    if(partQuery.trim().length<2){ setPartResults([]); return; }
+    const timeout=setTimeout(()=>{
+      fetch(`/api/crm/inventory?q=${encodeURIComponent(partQuery)}&pageSize=8`)
+        .then(r=>r.json())
+        .then(p=>setPartResults((p.products||[]).map((x:{id:string;name:string;available_stock?:number;stock?:number;inventory_status?:string})=>({id:x.id,name:x.name,available_stock:x.available_stock??x.stock??0,inventory_status:x.inventory_status||"available"}))))
+        .catch(()=>setPartResults([]));
+    },300);
+    return ()=>clearTimeout(timeout);
+  },[partQuery]);
   useEffect(()=>{ setMobileOpen(false); },[active]);
 
   const can=(permission:Permission)=>ROLE_META[role].permissions.includes(permission);
@@ -221,7 +234,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
       }else if(modal.kind==="appointment"){
         await post("/api/crm/appointments/update",{id:modal.item.id,starts_at:new Date(String(form.get("starts_at"))).toISOString(),technician_id:form.get("technician_id")||null,status:form.get("status")});
       }else if(modal.kind==="order"){
-        await post("/api/crm/orders/update",{id:modal.item.id,technician_id:form.get("technician_id")||null,status:form.get("status"),priority:form.get("priority"),warranty_type:form.get("warranty_type"),distance_km:form.get("distance_km")?Number(form.get("distance_km")):null});
+        await post("/api/crm/orders/update",{id:modal.item.id,technician_id:form.get("technician_id")||null,status:form.get("status"),priority:form.get("priority"),warranty_type:form.get("warranty_type"),distance_km:form.get("distance_km")?Number(form.get("distance_km")):null,required_part_id:form.get("required_part_id")||null});
       }else if(modal.kind==="manual"){
         const action=String(form.get("action"));
         await post("/api/crm/manual-management",{action,customer_id:form.get("customer_id")||undefined,customer_name:form.get("customer_name"),phone:form.get("phone"),email:form.get("email"),address:form.get("address"),sector:form.get("sector"),technician_id:form.get("technician_id")||null,starts_at:form.get("starts_at")?new Date(String(form.get("starts_at"))).toISOString():undefined,notes:form.get("notes"),equipment:form.get("equipment"),brand:form.get("brand"),model:form.get("model"),issue:form.get("issue"),priority:form.get("priority")});
@@ -583,6 +596,23 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
               <option value="fuera_garantia">Fuera de garantía</option>
             </select></label>
             <label>Distancia (km, ida y vuelta desde Pantoja)<input className="tc-input" type="number" step="0.1" name="distance_km" defaultValue={modal.item.distance_km||""} placeholder="Solo fuera de garantía, fuera del Gran Santo Domingo"/></label>
+            <div className="tc-full">
+              <label>Pieza requerida para esta reparación<input className="tc-input" value={partQuery} onChange={e=>{setPartQuery(e.target.value);setRequiredPart(null);}} placeholder="Buscar pieza o repuesto..."/></label>
+              {partResults.length>0&&!requiredPart&&<div style={{border:"1px solid var(--border)",borderRadius:8,marginTop:6}}>
+                {partResults.map(p=>{const bad=p.inventory_status==="out"||p.available_stock<=0;return(
+                  <button type="button" key={p.id} onClick={()=>{setRequiredPart(p);setPartQuery(p.name);setPartResults([]);}} style={{display:"flex",justifyContent:"space-between",width:"100%",padding:"8px 10px",background:"transparent",border:0,color:"var(--text)",cursor:"pointer"}}>
+                    <span>{p.name}</span>
+                    <span style={{color:bad?"var(--bad)":p.inventory_status==="low"?"var(--accent-2)":"var(--good)"}}>{bad?"Sin existencia":p.inventory_status==="low"?`Bajo (${p.available_stock})`:`Disponible (${p.available_stock})`}</span>
+                  </button>
+                );})}
+              </div>}
+              {requiredPart&&(requiredPart.inventory_status==="out"||requiredPart.available_stock<=0)&&(
+                <div className="tc-notice" style={{borderColor:"var(--bad)",color:"var(--bad)",marginTop:8}}>
+                  Sin disponibilidad — según el proceso del socio, se debe generar una orden de compra antes de coordinar la visita. No agendes todavía.
+                </div>
+              )}
+              <input type="hidden" name="required_part_id" value={requiredPart?.id||""}/>
+            </div>
             <div className="tc-full tc-notice">
               <strong style={{display:"block",marginBottom:6}}>Piezas y productos registrados por el técnico</strong>
               {orderMaterials===null?<span className="muted">Cargando...</span>:orderMaterials.length===0?<span className="muted">Ninguno registrado todavía.</span>:orderMaterials.map(m=>
