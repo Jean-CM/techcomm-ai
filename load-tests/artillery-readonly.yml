@@ -1,0 +1,73 @@
+config:
+  target: "{{ $env.TECHCOMM_TARGET }}"
+  phases:
+    - name: warmup
+      duration: 60
+      arrivalRate: 2
+    - name: ramp_to_expected_peak
+      duration: 180
+      arrivalRate: 5
+      rampTo: 20
+    - name: sustained_peak
+      duration: 300
+      arrivalRate: 20
+    - name: burst
+      duration: 90
+      arrivalRate: 20
+      rampTo: 35
+  plugins:
+    ensure:
+      thresholds:
+        - "http.response_time.p95": 1200
+        - "http.response_time.p99": 2500
+      conditions:
+        - expression: "vusers.failed / vusers.created < 0.01"
+          strict: true
+  defaults:
+    headers:
+      Cookie: "{{ $env.TECHCOMM_COOKIE }}"
+      Accept: "application/json"
+      User-Agent: "Techcomm-Artillery-Readonly/1.0"
+
+scenarios:
+  - name: Dashboard overview
+    weight: 30
+    flow:
+      - get:
+          url: "/api/crm/overview"
+      - think: 2
+      - get:
+          url: "/api/crm/overview"
+
+  - name: Inventory browse and search
+    weight: 35
+    flow:
+      - get:
+          url: "/api/crm/inventory?page=1&pageSize=50&sort=updated_desc"
+      - think: 1
+      - get:
+          url: "/api/crm/inventory?page=20&pageSize=50&sort=updated_desc"
+      - think: 1
+      - get:
+          url: "/api/crm/inventory?page=1&pageSize=50&q=Samsung&stockStatus=all"
+      - think: 1
+      - get:
+          url: "/api/crm/inventory?page=1&pageSize=50&stockStatus=low"
+
+  - name: Quotes browse
+    weight: 20
+    flow:
+      - get:
+          url: "/api/crm/quotes?page=1&pageSize=50&status=all&q="
+      - think: 2
+      - get:
+          url: "/api/crm/quotes?page=1&pageSize=50&status=sent&q="
+
+  - name: Health and lightweight checks
+    weight: 15
+    flow:
+      - get:
+          url: "/api/health"
+      - think: 1
+      - get:
+          url: "/api/crm/inventory?page=1&pageSize=25&stockStatus=out"
