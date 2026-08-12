@@ -6,6 +6,8 @@ type Payload = {
   status?: string;
   technician_id?: string | null;
   priority?: string;
+  warranty_type?: string;
+  distance_km?: number | null;
   actor_name?: string;
   actor_role?: string;
 };
@@ -23,6 +25,14 @@ const ALLOWED_STATUSES = new Set([
 ]);
 
 const ALLOWED_PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
+const ALLOWED_WARRANTY_TYPES = new Set([
+  "fabricante",
+  "fabricante_parcial",
+  "fabricante_promocion",
+  "tienda_distribuidor",
+  "techcomm",
+  "fuera_garantia",
+]);
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Payload;
@@ -59,6 +69,17 @@ export async function POST(request: Request) {
 
   if (body.technician_id !== undefined) {
     values.technician_id = body.technician_id || null;
+  }
+
+  if (body.warranty_type) {
+    if (!ALLOWED_WARRANTY_TYPES.has(body.warranty_type)) {
+      return NextResponse.json({ ok: false, error: "Tipo de garantía no permitido." }, { status: 400 });
+    }
+    values.warranty_type = body.warranty_type;
+  }
+
+  if (body.distance_km !== undefined) {
+    values.distance_km = body.distance_km;
   }
 
   const { data: order, error } = await supabase

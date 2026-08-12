@@ -27,7 +27,7 @@ type Customer = { id:string; full_name?:string|null; phone:string; email?:string
 type Product = { id:string; sku?:string|null; name:string; piece_name?:string|null; description?:string|null; item_type?:string|null; category?:string|null; brand?:string|null; model?:string|null; unit_cost?:number|null; sale_price?:number|null; price?:number|null; max_discount_pct?:number|null; minimum_authorized_price?:number|null; installation_price?:number|null; delivery_price?:number|null; installation_includes_delivery?:boolean|null; stock:number; reserved_stock:number; active?:boolean };
 type Technician = { id:string; full_name:string; phone?:string|null; specialties?:string[]|null; zones?:string[]|null; status:string; whatsapp_enabled?:boolean };
 type Appointment = { id:string; customer_id?:string|null; technician_id?:string|null; starts_at:string; ends_at?:string|null; address?:string|null; status:string; confirmation_status?:string|null; technician_confirmation_status?:string|null; requires_manual_assignment?:boolean; notes?:string|null; created_at?:string; updated_at?:string };
-type WorkOrder = { id:string; order_number:string; order_type?:string|null; customer_id?:string|null; appointment_id?:string|null; technician_id?:string|null; equipment?:string|null; brand?:string|null; model?:string|null; issue?:string|null; status:string; priority?:string|null; source?:string|null; created_at?:string; updated_at?:string };
+type WorkOrder = { id:string; order_number:string; order_type?:string|null; customer_id?:string|null; appointment_id?:string|null; technician_id?:string|null; equipment?:string|null; brand?:string|null; model?:string|null; issue?:string|null; status:string; priority?:string|null; source?:string|null; warranty_type?:string|null; distance_km?:number|null; created_at?:string; updated_at?:string };
 type Quote = { id:string; quote_number:string; customer_id?:string|null; status:string; total?:number|null; created_at?:string; expires_at?:string|null };
 type Sale = { id:string; customer_id?:string|null; product_id?:string|null; quantity:number; unit_price:number; status:string; source?:string|null; created_at?:string };
 type CallEvent = { id:string; conversation_id:string; customer_phone?:string|null; status?:string|null; summary?:string|null; transcript?:unknown; analysis?:unknown; metadata?:Record<string,unknown>|null; created_at:string };
@@ -221,7 +221,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
       }else if(modal.kind==="appointment"){
         await post("/api/crm/appointments/update",{id:modal.item.id,starts_at:new Date(String(form.get("starts_at"))).toISOString(),technician_id:form.get("technician_id")||null,status:form.get("status")});
       }else if(modal.kind==="order"){
-        await post("/api/crm/orders/update",{id:modal.item.id,technician_id:form.get("technician_id")||null,status:form.get("status"),priority:form.get("priority")});
+        await post("/api/crm/orders/update",{id:modal.item.id,technician_id:form.get("technician_id")||null,status:form.get("status"),priority:form.get("priority"),warranty_type:form.get("warranty_type"),distance_km:form.get("distance_km")?Number(form.get("distance_km")):null});
       }else if(modal.kind==="manual"){
         const action=String(form.get("action"));
         await post("/api/crm/manual-management",{action,customer_id:form.get("customer_id")||undefined,customer_name:form.get("customer_name"),phone:form.get("phone"),email:form.get("email"),address:form.get("address"),sector:form.get("sector"),technician_id:form.get("technician_id")||null,starts_at:form.get("starts_at")?new Date(String(form.get("starts_at"))).toISOString():undefined,notes:form.get("notes"),equipment:form.get("equipment"),brand:form.get("brand"),model:form.get("model"),issue:form.get("issue"),priority:form.get("priority")});
@@ -574,6 +574,15 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
             <label>Estado<select className="tc-select" name="status" defaultValue={modal.item.status}>{["new","scheduled","assigned","in_progress","pending_customer","approved","on_hold","completed","cancelled"].map(value=><option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
             <label>Prioridad<select className="tc-select" name="priority" defaultValue={modal.item.priority||"normal"}><option value="low">Baja</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
             <label className="tc-full">Técnico<select className="tc-select" name="technician_id" defaultValue={modal.item.technician_id||""}><option value="">Sin técnico</option>{data.technicians.map(item=><option key={item.id} value={item.id}>{item.full_name} · {statusLabel(item.status)}</option>)}</select></label>
+            <label>Tipo de garantía<select className="tc-select" name="warranty_type" defaultValue={modal.item.warranty_type||"fuera_garantia"}>
+              <option value="fabricante">Fabricante</option>
+              <option value="fabricante_parcial">Fabricante parcial</option>
+              <option value="fabricante_promocion">Fabricante por promoción</option>
+              <option value="tienda_distribuidor">Tienda / distribuidor</option>
+              <option value="techcomm">Techcomm (30 días)</option>
+              <option value="fuera_garantia">Fuera de garantía</option>
+            </select></label>
+            <label>Distancia (km, ida y vuelta desde Pantoja)<input className="tc-input" type="number" step="0.1" name="distance_km" defaultValue={modal.item.distance_km||""} placeholder="Solo fuera de garantía, fuera del Gran Santo Domingo"/></label>
             <div className="tc-full tc-notice">
               <strong style={{display:"block",marginBottom:6}}>Piezas y productos registrados por el técnico</strong>
               {orderMaterials===null?<span className="muted">Cargando...</span>:orderMaterials.length===0?<span className="muted">Ninguno registrado todavía.</span>:orderMaterials.map(m=>

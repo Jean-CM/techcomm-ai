@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Material = { id: string; product_name: string; quantity: number; unit_price: number | null };
@@ -25,6 +25,12 @@ export default function TechnicianOrderView({ orderId }: { orderId: string }) {
   const [quantity, setQuantity] = useState(1);
   const [isAdditionalPurchase, setIsAdditionalPurchase] = useState(false);
   const [quoteFeedback, setQuoteFeedback] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [acceptance, setAcceptance] = useState<"accepted" | "rejected" | "">("");
+  const [acceptanceNotes, setAcceptanceNotes] = useState("");
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
 
   async function load() {
     try {
@@ -52,10 +58,20 @@ export default function TechnicianOrderView({ orderId }: { orderId: string }) {
   async function act(action: "salio" | "llego" | "termino") {
     setLoadingAction(action);
     try {
+      const body: Record<string, unknown> = { action };
+      if (action === "termino") {
+        if (!acceptance) throw new Error("Indica si el cliente aceptó o rechazó el servicio.");
+        if (!signatureDataUrl) throw new Error("Falta la firma del cliente.");
+        if (photos.length === 0) throw new Error("Agrega al menos una foto de evidencia.");
+        body.customer_acceptance = acceptance;
+        body.customer_acceptance_notes = acceptanceNotes;
+        body.signature_base64 = signatureDataUrl;
+        body.photo_base64_list = photos;
+      }
       const response = await fetch(`/api/tecnico/ordenes/${orderId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(body),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Error");
@@ -65,6 +81,49 @@ export default function TechnicianOrderView({ orderId }: { orderId: string }) {
     } finally {
       setLoadingAction(null);
     }
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => setPhotos((prev) => [...prev, reader.result as string]);
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  }
+
+  function pointerPos(e: React.PointerEvent<HTMLCanvasElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+  function startDraw(e: React.PointerEvent<HTMLCanvasElement>) {
+    drawingRef.current = true;
+    const ctx = canvasRef.current?.getContext("2d");
+    const { x, y } = pointerPos(e);
+    ctx?.beginPath();
+    ctx?.moveTo(x, y);
+  }
+  function draw(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = pointerPos(e);
+    ctx.strokeStyle = "#14181D";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
+  function endDraw() {
+    drawingRef.current = false;
+    if (canvasRef.current) setSignatureDataUrl(canvasRef.current.toDataURL("image/png"));
+  }
+  function clearSignature() {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setSignatureDataUrl(null);
   }
 
   async function addMaterial(product: Product) {
@@ -124,6 +183,47 @@ export default function TechnicianOrderView({ orderId }: { orderId: string }) {
         <button style={btnStyle(Boolean(order.technician_arrived_at), !order.technician_departed_at || Boolean(order.technician_arrived_at) || loadingAction !== null)} disabled={!order.technician_departed_at || Boolean(order.technician_arrived_at) || loadingAction !== null} onClick={() => act("llego")}>
           {order.technician_arrived_at ? "✓ Llegaste" : loadingAction === "llego" ? "Registrando..." : "Llegué"}
         </button>
+
+        {order.technician_arrived_at && !order.technician_completed_at && (
+          <div style={{ background: "#1C2129", borderRadius: 10, padding: 16, marginBottom: 14 }}>
+            <p style={{ margin: "0 0 10px", fontWeight: 700 }}>Evidencia para cerrar el servicio</p>
+
+            <p style={{ margin: "0 0 6px", color: "#9BA1A6", fontSize: 13 }}>Fotos del trabajo realizado</p>
+            <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotoChange} style={{ marginBottom: 10 }} />
+            {photos.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                {photos.map((p, i) => <img key={i} src={p} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6 }} />)}
+              </div>
+            )}
+
+            <p style={{ margin: "10px 0 6px", color: "#9BA1A6", fontSize: 13 }}>Firma del cliente</p>
+            <canvas
+              ref={canvasRef}
+              width={400}
+              height={140}
+              style={{ width: "100%", height: 140, background: "#F2EEE6", borderRadius: 8, touchAction: "none" }}
+              onPointerDown={startDraw}
+              onPointerMove={draw}
+              onPointerUp={endDraw}
+              onPointerLeave={endDraw}
+            />
+            <button type="button" onClick={clearSignature} style={{ marginTop: 6, background: "transparent", border: "1px solid #2C333D", color: "#9BA1A6", borderRadius: 6, padding: "4px 10px", fontSize: 12 }}>Borrar firma</button>
+
+            <p style={{ margin: "14px 0 6px", color: "#9BA1A6", fontSize: 13 }}>¿El cliente acepta el servicio?</p>
+            <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+              <button type="button" onClick={() => setAcceptance("accepted")} style={{ flex: 1, padding: 10, borderRadius: 8, border: acceptance === "accepted" ? "2px solid #4CC38A" : "1px solid #2C333D", background: acceptance === "accepted" ? "#1a2a22" : "transparent", color: "#F2EEE6" }}>✓ Acepta</button>
+              <button type="button" onClick={() => setAcceptance("rejected")} style={{ flex: 1, padding: 10, borderRadius: 8, border: acceptance === "rejected" ? "2px solid #E8646A" : "1px solid #2C333D", background: acceptance === "rejected" ? "#2a1a1c" : "transparent", color: "#F2EEE6" }}>✗ Rechaza</button>
+            </div>
+            {acceptance === "rejected" && (
+              <textarea
+                value={acceptanceNotes}
+                onChange={(e) => setAcceptanceNotes(e.target.value)}
+                placeholder="¿Por qué rechaza el cliente?"
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #2C333D", background: "#0F1318", color: "#F2EEE6", minHeight: 60 }}
+              />
+            )}
+          </div>
+        )}
 
         {order.technician_arrived_at && !order.technician_completed_at && (
           <div style={{ background: "#1C2129", borderRadius: 10, padding: 16, marginBottom: 14 }}>

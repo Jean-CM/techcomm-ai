@@ -59,6 +59,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     quantity?: number;
     unit_price?: number;
     is_additional_purchase?: boolean;
+    customer_acceptance?: "accepted" | "rejected";
+    customer_acceptance_notes?: string;
+    signature_base64?: string;
+    photo_base64_list?: string[];
   };
 
   const { data: order } = await admin!
@@ -156,6 +160,35 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   else if (body.action === "llego") { updates.technician_arrived_at = now; updates.status = "in_progress"; }
   else if (body.action === "termino") { updates.technician_completed_at = now; updates.status = "completed"; }
   else return NextResponse.json({ ok: false, error: "Acción inválida." }, { status: 400 });
+
+  if (body.action === "termino") {
+    if (!body.customer_acceptance) {
+      return NextResponse.json({ ok: false, error: "Falta registrar si el cliente aceptó o rechazó el servicio." }, { status: 400 });
+    }
+    if (!body.signature_base64) {
+      return NextResponse.json({ ok: false, error: "Falta la firma del cliente." }, { status: 400 });
+    }
+    if (!body.photo_base64_list || body.photo_base64_list.length === 0) {
+      return NextResponse.json({ ok: false, error: "Falta al menos una foto de evidencia del trabajo." }, { status: 400 });
+    }
+
+    const photoPaths: string[] = [];
+    for (let i = 0; i < body.photo_base64_list.length; i++) {
+      const buffer = Buffer.from(body.photo_base64_list[i].split(",").pop() ?? "", "base64");
+      const path = `${order.id}/photo-${Date.now()}-${i}.jpg`;
+      const { error: uploadError } = await admin!.storage.from("service-evidence").upload(path, buffer, { contentType: "image/jpeg", upsert: true });
+      if (!uploadError) photoPaths.push(path);
+    }
+
+    const signatureBuffer = Buffer.from(body.signature_base64.split(",").pop() ?? "", "base64");
+    const signaturePath = `${order.id}/signature-${Date.now()}.png`;
+    await admin!.storage.from("service-evidence").upload(signaturePath, signatureBuffer, { contentType: "image/png", upsert: true });
+
+    updates.completion_photo_paths = photoPaths;
+    updates.customer_signature_path = signaturePath;
+    updates.customer_acceptance = body.customer_acceptance;
+    updates.customer_acceptance_notes = body.customer_acceptance_notes ?? null;
+  }
 
   const { error } = await admin!.from("work_orders").update(updates).eq("id", order.id);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
