@@ -21,7 +21,7 @@ import QuotePanel from "@/components/quote-panel";
 const INACTIVITY_LIMIT_MS = 5 * 60 * 1000;
 
 type Role = "super_admin" | "admin" | "secretary" | "supervisor" | "technician";
-type Permission = "edit_customer" | "edit_technician" | "edit_product" | "reschedule" | "reassign" | "update_order" | "manual_management" | "view_financial" | "manage_quotes";
+type Permission = "edit_customer" | "edit_technician" | "edit_product" | "reschedule" | "reassign" | "update_order" | "manual_management" | "view_financial" | "manage_quotes" | "approve_quote";
 
 type Customer = { id:string; full_name?:string|null; phone:string; email?:string|null; address?:string|null; sector?:string|null; source?:string|null; created_at?:string; updated_at?:string };
 type Product = { id:string; sku?:string|null; name:string; piece_name?:string|null; description?:string|null; item_type?:string|null; category?:string|null; brand?:string|null; model?:string|null; unit_cost?:number|null; sale_price?:number|null; price?:number|null; max_discount_pct?:number|null; minimum_authorized_price?:number|null; installation_price?:number|null; delivery_price?:number|null; installation_includes_delivery?:boolean|null; stock:number; reserved_stock:number; active?:boolean };
@@ -50,10 +50,10 @@ type ModalState =
 const EMPTY: Overview = { ok:true, customers:[], products:[], technicians:[], appointments:[], work_orders:[], quotes:[], sales:[], call_events:[], call_reminders:[] };
 
 const ROLE_META: Record<Role,{label:string;description:string;menus:string[];permissions:Permission[]}> = {
-  super_admin:{ label:"Super Admin", description:"Control total del CRM, operación y configuración.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes"] },
-  admin:{ label:"Administrador", description:"Administración operativa completa sin configuración sensible.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes"] },
+  super_admin:{ label:"Super Admin", description:"Control total del CRM, operación y configuración.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes","approve_quote"] },
+  admin:{ label:"Administrador", description:"Administración operativa completa sin configuración sensible.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes","approve_quote"] },
   secretary:{ label:"Secretaría", description:"Atención de clientes, agenda, reprogramaciones y gestiones presenciales.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Cotizaciones"], permissions:["edit_customer","reschedule","manual_management","manage_quotes"] },
-  supervisor:{ label:"Supervisor técnico", description:"Citas, técnicos, órdenes, pendientes y reasignaciones.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos"], permissions:["edit_technician","reschedule","reassign","update_order"] },
+  supervisor:{ label:"Supervisor técnico", description:"Citas, técnicos, órdenes, pendientes, reasignaciones, y aprobación de cotizaciones con descuento.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Cotizaciones"], permissions:["edit_technician","reschedule","reassign","update_order","approve_quote"] },
   technician:{ label:"Técnico (vista previa)", description:"Así se ve la operación desde el punto de vista de un técnico — solo su agenda y sus órdenes. Los técnicos reales usan su propio portal en /tecnico, no el CRM.", menus:["Dashboard","Agenda y Órdenes"], permissions:[] },
 };
 
@@ -109,7 +109,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
   const [orderMaterials,setOrderMaterials]=useState<{id:string;product_name:string;quantity:number;unit_price:number|null;is_additional_purchase:boolean}[]|null>(null);
   const [partQuery,setPartQuery]=useState("");
   const [partResults,setPartResults]=useState<{id:string;name:string;available_stock:number;inventory_status:string}[]>([]);
-  const [requiredPart,setRequiredPart]=useState<{id:string;name:string;available_stock:number;inventory_status:string}|null>(null);
+  const [requiredParts,setRequiredParts]=useState<{id:string;product_id:string;quantity:number;products:{name:string;available_stock:number;inventory_status:string}}[]|null>(null);
   const [dateFilter,setDateFilter]=useState("");
   const [collapsed,setCollapsed]=useState(false);
   const [mobileOpen,setMobileOpen]=useState(false);
@@ -234,7 +234,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
       }else if(modal.kind==="appointment"){
         await post("/api/crm/appointments/update",{id:modal.item.id,starts_at:new Date(String(form.get("starts_at"))).toISOString(),technician_id:form.get("technician_id")||null,status:form.get("status")});
       }else if(modal.kind==="order"){
-        await post("/api/crm/orders/update",{id:modal.item.id,technician_id:form.get("technician_id")||null,status:form.get("status"),priority:form.get("priority"),warranty_type:form.get("warranty_type"),distance_km:form.get("distance_km")?Number(form.get("distance_km")):null,required_part_id:form.get("required_part_id")||null});
+        await post("/api/crm/orders/update",{id:modal.item.id,technician_id:form.get("technician_id")||null,status:form.get("status"),priority:form.get("priority"),warranty_type:form.get("warranty_type"),distance_km:form.get("distance_km")?Number(form.get("distance_km")):null});
       }else if(modal.kind==="manual"){
         const action=String(form.get("action"));
         await post("/api/crm/manual-management",{action,customer_id:form.get("customer_id")||undefined,customer_name:form.get("customer_name"),phone:form.get("phone"),email:form.get("email"),address:form.get("address"),sector:form.get("sector"),technician_id:form.get("technician_id")||null,starts_at:form.get("starts_at")?new Date(String(form.get("starts_at"))).toISOString():undefined,notes:form.get("notes"),equipment:form.get("equipment"),brand:form.get("brand"),model:form.get("model"),issue:form.get("issue"),priority:form.get("priority")});
@@ -481,7 +481,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
                       <td><div className="tc-truncate">{appt?.address||customer?.address||"Sin dirección"}</div></td>
                       <td>{tech?tech.full_name:<StatusBadge tone="warning">Sin técnico</StatusBadge>}</td>
                       <td><StatusBadge tone={toneFor(item.status)}>{statusLabel(item.status)}</StatusBadge></td>
-                      <td><div className="tc-rowactions">{can("update_order")&&<button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" onClick={()=>{setModal({kind:"order",item});setOrderMaterials(null);fetch(`/api/crm/orders/${item.id}/materials`).then(r=>r.json()).then(p=>setOrderMaterials(p.materials||[])).catch(()=>setOrderMaterials([]));}}>Gestionar</button>}{appt&&can("reschedule")&&<button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={()=>setModal({kind:"appointment",item:appt})}>Cita</button>}</div></td>
+                      <td><div className="tc-rowactions">{can("update_order")&&<button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" onClick={()=>{setModal({kind:"order",item});setOrderMaterials(null);setRequiredParts(null);fetch(`/api/crm/orders/${item.id}/materials`).then(r=>r.json()).then(p=>setOrderMaterials(p.materials||[])).catch(()=>setOrderMaterials([]));fetch(`/api/crm/orders/required-parts?work_order_id=${item.id}`).then(r=>r.json()).then(p=>setRequiredParts(p.parts||[])).catch(()=>setRequiredParts([]));}}>Gestionar</button>}{appt&&can("reschedule")&&<button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={()=>setModal({kind:"appointment",item:appt})}>Cita</button>}</div></td>
                     </tr>
                   );})}</tbody>
                 </table>
@@ -597,21 +597,39 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
             </select></label>
             <label>Distancia (km, ida y vuelta desde Pantoja)<input className="tc-input" type="number" step="0.1" name="distance_km" defaultValue={modal.item.distance_km||""} placeholder="Solo fuera de garantía, fuera del Gran Santo Domingo"/></label>
             <div className="tc-full">
-              <label>Pieza requerida para esta reparación<input className="tc-input" value={partQuery} onChange={e=>{setPartQuery(e.target.value);setRequiredPart(null);}} placeholder="Buscar pieza o repuesto..."/></label>
-              {partResults.length>0&&!requiredPart&&<div style={{border:"1px solid var(--border)",borderRadius:8,marginTop:6}}>
+              <label>Piezas requeridas para esta reparación<input className="tc-input" value={partQuery} onChange={e=>setPartQuery(e.target.value)} placeholder="Buscar pieza o repuesto para agregar..."/></label>
+              {partResults.length>0&&<div style={{border:"1px solid var(--border)",borderRadius:8,marginTop:6}}>
                 {partResults.map(p=>{const bad=p.inventory_status==="out"||p.available_stock<=0;return(
-                  <button type="button" key={p.id} onClick={()=>{setRequiredPart(p);setPartQuery(p.name);setPartResults([]);}} style={{display:"flex",justifyContent:"space-between",width:"100%",padding:"8px 10px",background:"transparent",border:0,color:"var(--text)",cursor:"pointer"}}>
+                  <button type="button" key={p.id} onClick={async()=>{
+                    const response=await fetch("/api/crm/orders/required-parts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({work_order_id:modal.item.id,product_id:p.id,quantity:1})});
+                    const payload=await response.json();
+                    if(payload.ok){setPartQuery("");setPartResults([]);const refreshed=await fetch(`/api/crm/orders/required-parts?work_order_id=${modal.item.id}`).then(r=>r.json());setRequiredParts(refreshed.parts||[]);}
+                  }} style={{display:"flex",justifyContent:"space-between",width:"100%",padding:"8px 10px",background:"transparent",border:0,color:"var(--text)",cursor:"pointer"}}>
                     <span>{p.name}</span>
                     <span style={{color:bad?"var(--bad)":p.inventory_status==="low"?"var(--accent-2)":"var(--good)"}}>{bad?"Sin existencia":p.inventory_status==="low"?`Bajo (${p.available_stock})`:`Disponible (${p.available_stock})`}</span>
                   </button>
                 );})}
               </div>}
-              {requiredPart&&(requiredPart.inventory_status==="out"||requiredPart.available_stock<=0)&&(
+              {requiredParts&&requiredParts.length>0&&<div style={{marginTop:10}}>
+                {requiredParts.map(rp=>{const bad=rp.products.inventory_status==="out"||rp.products.available_stock<=0;return(
+                  <div key={rp.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:"1px solid var(--border)"}}>
+                    <span>{rp.quantity}× {rp.products.name}</span>
+                    <span style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{color:bad?"var(--bad)":rp.products.inventory_status==="low"?"var(--accent-2)":"var(--good)",fontSize:13}}>{bad?"Sin existencia":rp.products.inventory_status==="low"?"Bajo":"Disponible"}</span>
+                      <button type="button" onClick={async()=>{
+                        const response=await fetch("/api/crm/orders/required-parts",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:rp.id,work_order_id:modal.item.id})});
+                        const payload=await response.json();
+                        if(payload.ok){const refreshed=await fetch(`/api/crm/orders/required-parts?work_order_id=${modal.item.id}`).then(r=>r.json());setRequiredParts(refreshed.parts||[]);}
+                      }} style={{background:"transparent",border:0,color:"var(--muted)",cursor:"pointer"}}>Quitar</button>
+                    </span>
+                  </div>
+                );})}
+              </div>}
+              {requiredParts&&requiredParts.some(rp=>rp.products.inventory_status==="out"||rp.products.available_stock<=0)&&(
                 <div className="tc-notice" style={{borderColor:"var(--bad)",color:"var(--bad)",marginTop:8}}>
-                  Sin disponibilidad — según el proceso del socio, se debe generar una orden de compra antes de coordinar la visita. No agendes todavía.
+                  Al menos una pieza sin disponibilidad — según el proceso del socio, se debe generar una orden de compra antes de coordinar la visita. No agendes todavía.
                 </div>
               )}
-              <input type="hidden" name="required_part_id" value={requiredPart?.id||""}/>
             </div>
             <div className="tc-full tc-notice">
               <strong style={{display:"block",marginBottom:6}}>Piezas y productos registrados por el técnico</strong>
