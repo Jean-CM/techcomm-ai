@@ -27,7 +27,7 @@ type Customer = { id:string; full_name?:string|null; phone:string; email?:string
 type Product = { id:string; sku?:string|null; name:string; piece_name?:string|null; description?:string|null; item_type?:string|null; category?:string|null; brand?:string|null; model?:string|null; unit_cost?:number|null; sale_price?:number|null; price?:number|null; max_discount_pct?:number|null; minimum_authorized_price?:number|null; installation_price?:number|null; delivery_price?:number|null; installation_includes_delivery?:boolean|null; stock:number; reserved_stock:number; active?:boolean };
 type Technician = { id:string; full_name:string; phone?:string|null; specialties?:string[]|null; zones?:string[]|null; status:string; whatsapp_enabled?:boolean };
 type Appointment = { id:string; customer_id?:string|null; technician_id?:string|null; starts_at:string; ends_at?:string|null; address?:string|null; status:string; confirmation_status?:string|null; technician_confirmation_status?:string|null; requires_manual_assignment?:boolean; notes?:string|null; created_at?:string; updated_at?:string };
-type WorkOrder = { id:string; order_number:string; order_type?:string|null; service_category?:string|null; customer_id?:string|null; appointment_id?:string|null; technician_id?:string|null; equipment?:string|null; brand?:string|null; model?:string|null; issue?:string|null; status:string; priority?:string|null; source?:string|null; warranty_type?:string|null; distance_km?:number|null; created_at?:string; updated_at?:string };
+type WorkOrder = { id:string; order_number:string; order_type?:string|null; service_category?:string|null; service_line?:string|null; imei?:string|null; operator_ticket?:string|null; intake_channel?:string|null; origin_branch?:string|null; current_branch?:string|null; customer_id?:string|null; appointment_id?:string|null; technician_id?:string|null; equipment?:string|null; brand?:string|null; model?:string|null; issue?:string|null; status:string; priority?:string|null; source?:string|null; warranty_type?:string|null; distance_km?:number|null; created_at?:string; updated_at?:string };
 type Quote = { id:string; quote_number:string; customer_id?:string|null; status:string; total?:number|null; created_at?:string; expires_at?:string|null };
 type Sale = { id:string; customer_id?:string|null; product_id?:string|null; quantity:number; unit_price:number; status:string; source?:string|null; created_at?:string };
 type CallEvent = { id:string; conversation_id:string; customer_phone?:string|null; status?:string|null; summary?:string|null; transcript?:unknown; analysis?:unknown; metadata?:Record<string,unknown>|null; created_at:string };
@@ -50,8 +50,8 @@ type ModalState =
 const EMPTY: Overview = { ok:true, customers:[], products:[], technicians:[], appointments:[], work_orders:[], quotes:[], sales:[], call_events:[], call_reminders:[] };
 
 const ROLE_META: Record<Role,{label:string;description:string;menus:string[];permissions:Permission[]}> = {
-  super_admin:{ label:"Super Admin", description:"Control total del CRM, operación y configuración.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes","approve_quote"] },
-  admin:{ label:"Administrador", description:"Administración operativa completa sin configuración sensible.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes","approve_quote"] },
+  super_admin:{ label:"Super Admin", description:"Control total del CRM, operación y configuración.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Taller","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes","approve_quote"] },
+  admin:{ label:"Administrador", description:"Administración operativa completa sin configuración sensible.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Taller","Técnicos","Ventas","Inventario","Cotizaciones"], permissions:["edit_customer","edit_technician","edit_product","reschedule","reassign","update_order","manual_management","view_financial","manage_quotes","approve_quote"] },
   secretary:{ label:"Secretaría", description:"Atención de clientes, agenda, reprogramaciones y gestiones presenciales.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Cotizaciones"], permissions:["edit_customer","reschedule","manual_management","manage_quotes"] },
   supervisor:{ label:"Supervisor técnico", description:"Citas, técnicos, órdenes, pendientes, reasignaciones, y aprobación de cotizaciones con descuento.", menus:["Dashboard","Conversaciones","Clientes","Agenda y Órdenes","Técnicos","Cotizaciones"], permissions:["edit_technician","reschedule","reassign","update_order","approve_quote"] },
   technician:{ label:"Técnico (vista previa)", description:"Así se ve la operación desde el punto de vista de un técnico — solo su agenda y sus órdenes. Los técnicos reales usan su propio portal en /tecnico, no el CRM.", menus:["Dashboard","Agenda y Órdenes"], permissions:[] },
@@ -521,6 +521,8 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
               </div>
             </div>}
 
+            {!loading&&active==="Taller"&&<CelularesPanel workOrders={data.work_orders.filter(o=>o.service_line==="celulares")} technicians={data.technicians} customersById={customersById} onOpenOrder={(item)=>{setModal({kind:"order",item});setOrderMaterials(null);setRequiredParts(null);setOrderPayments(null);fetch(`/api/crm/orders/${item.id}/materials`).then(r=>r.json()).then(p=>setOrderMaterials(p.materials||[])).catch(()=>setOrderMaterials([]));fetch(`/api/crm/orders/required-parts?work_order_id=${item.id}`).then(r=>r.json()).then(p=>setRequiredParts(p.parts||[])).catch(()=>setRequiredParts([]));fetch(`/api/crm/orders/payments?work_order_id=${item.id}`).then(r=>r.json()).then(p=>setOrderPayments(p.payments||[])).catch(()=>setOrderPayments([]));}} onCreated={load} />}
+
             {active==="Inventario"&&<InventoryPanel canEdit={can("edit_product")} />}
 
             {active==="Cotizaciones"&&<QuotePanel customers={data.customers} canManage={can("manage_quotes")} canApprove={canOpenAudit&&(role==="super_admin"||role==="admin")} />}
@@ -633,6 +635,19 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
               <option value="instalacion">Instalación</option>
               <option value="venta">Venta</option>
             </select></label>
+            {modal.item.service_line==="celulares"&&<>
+              <div className="tc-full tc-notice">
+                <strong style={{display:"block",marginBottom:6}}>Datos del dispositivo (Celulares)</strong>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                  <div><span className="muted">IMEI</span><br/>{modal.item.imei||"—"}</div>
+                  <div><span className="muted">Ticket operador</span><br/>{modal.item.operator_ticket||"—"}</div>
+                  <div><span className="muted">Sucursal actual</span><br/>{modal.item.current_branch||"—"}</div>
+                </div>
+              </div>
+              <div className="tc-full">
+                <ApprovalCallsSection workOrderId={modal.item.id} />
+              </div>
+            </>}
             <label>Distancia (km, ida y vuelta desde Pantoja)<input className="tc-input" type="number" step="0.1" name="distance_km" defaultValue={modal.item.distance_km||""} placeholder="Solo fuera de garantía, fuera del Gran Santo Domingo"/></label>
             <div className="tc-full">
               <label>Piezas requeridas para esta reparación<input className="tc-input" value={partQuery} onChange={e=>setPartQuery(e.target.value)} placeholder="Buscar pieza o repuesto para agregar..."/></label>
@@ -737,6 +752,168 @@ function SectionCard({ eyebrow, title, onOpen, children }:{ eyebrow:string; titl
       </div>
       <div>{children}</div>
     </section>
+  );
+}
+
+const CELULARES_STATUS_LABEL: Record<string,string> = {
+  new:"Nuevo", diagnosis:"Diagnóstico", esperando_repuesto:"Esperando repuesto",
+  esperando_aprobacion:"Esperando aprobación", approved:"Aprobado", repairing:"En reparación",
+  control_calidad:"Control de calidad", listo_despacho:"Listo para despacho",
+  despachado:"Despachado", devuelto_cliente:"Devuelto al cliente", cancelled:"Cancelado",
+};
+
+function CelularesPanel({workOrders,technicians,customersById,onOpenOrder,onCreated}:{
+  workOrders:WorkOrder[]; technicians:Technician[]; customersById:Map<string,Customer>;
+  onOpenOrder:(item:WorkOrder)=>void; onCreated:()=>void;
+}){
+  const [showForm,setShowForm]=useState(false);
+  const [statusFilter,setStatusFilter]=useState("all");
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState<string|null>(null);
+  const [form,setForm]=useState({customer_name:"",customer_phone:"",brand:"",model:"",imei:"",issue:"",operator_ticket:"",intake_channel:"casa_central",origin_branch:"",warranty_type:"fuera_garantia"});
+
+  const filtered = statusFilter==="all"?workOrders:workOrders.filter(o=>o.status===statusFilter);
+
+  async function submit(){
+    if(!form.customer_name||!form.brand||!form.issue){setError("Nombre del cliente, marca y falla son requeridos.");return;}
+    setSaving(true);setError(null);
+    try{
+      const response=await fetch("/api/crm/celulares/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
+      const payload=await response.json();
+      if(!response.ok)throw new Error(payload.error||"Error al crear el ticket");
+      setShowForm(false);
+      setForm({customer_name:"",customer_phone:"",brand:"",model:"",imei:"",issue:"",operator_ticket:"",intake_channel:"casa_central",origin_branch:"",warranty_type:"fuera_garantia"});
+      onCreated();
+    }catch(err){
+      setError(err instanceof Error?err.message:"Error al crear el ticket");
+    }finally{
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="tc-card">
+      <div className="tc-card-head">
+        <div><span className="tc-card-title-eyebrow">TALLER — CELULARES Y DISPOSITIVOS</span><h3>Recepción y reparación en taller</h3><p className="muted">Sin visita de campo — el equipo se recibe, se diagnostica y se repara en Casa Central o Santiago.</p></div>
+        <button type="button" className="tc-btn tc-btn-sm" onClick={()=>setShowForm(s=>!s)}>{showForm?"Cancelar":"+ Nuevo ticket"}</button>
+      </div>
+
+      {showForm&&<div className="tc-notice" style={{marginBottom:16}}>
+        {error&&<p style={{color:"crimson"}}>{error}</p>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+          <label>Cliente<input className="tc-input" value={form.customer_name} onChange={e=>setForm({...form,customer_name:e.target.value})}/></label>
+          <label>Teléfono<input className="tc-input" value={form.customer_phone} onChange={e=>setForm({...form,customer_phone:e.target.value})}/></label>
+          <label>Marca<input className="tc-input" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/></label>
+          <label>Modelo<input className="tc-input" value={form.model} onChange={e=>setForm({...form,model:e.target.value})}/></label>
+          <label>IMEI<input className="tc-input" value={form.imei} onChange={e=>setForm({...form,imei:e.target.value})}/></label>
+          <label>Ticket del operador<input className="tc-input" value={form.operator_ticket} onChange={e=>setForm({...form,operator_ticket:e.target.value})}/></label>
+          <label>Canal de ingreso<select className="tc-select" value={form.intake_channel} onChange={e=>setForm({...form,intake_channel:e.target.value})}>
+            <option value="casa_central">Casa Central</option>
+            <option value="santiago">Santiago</option>
+            <option value="operador_claro">Operador Claro</option>
+            <option value="operador_altice">Operador Altice</option>
+            <option value="otro">Otro</option>
+          </select></label>
+          <label>Sucursal de procedencia<input className="tc-input" value={form.origin_branch} onChange={e=>setForm({...form,origin_branch:e.target.value})}/></label>
+          <label>Tipo de garantía<select className="tc-select" value={form.warranty_type} onChange={e=>setForm({...form,warranty_type:e.target.value})}>
+            <option value="fabricante">Fabricante</option>
+            <option value="fabricante_parcial">Fabricante parcial</option>
+            <option value="techcomm">Techcomm (30 días)</option>
+            <option value="fuera_garantia">Fuera de garantía</option>
+          </select></label>
+          <label className="tc-full">Falla reportada<textarea className="tc-input" value={form.issue} onChange={e=>setForm({...form,issue:e.target.value})}/></label>
+        </div>
+        <button type="button" className="tc-btn tc-btn-sm" disabled={saving} style={{marginTop:10}} onClick={submit}>{saving?"Guardando...":"Crear ticket"}</button>
+      </div>}
+
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        <button type="button" className={statusFilter==="all"?"tc-btn tc-btn-sm":"tc-btn tc-btn-ghost tc-btn-sm"} onClick={()=>setStatusFilter("all")}>Todos ({workOrders.length})</button>
+        {Object.entries(CELULARES_STATUS_LABEL).map(([key,label])=>{
+          const count=workOrders.filter(o=>o.status===key).length;
+          if(!count)return null;
+          return <button key={key} type="button" className={statusFilter===key?"tc-btn tc-btn-sm":"tc-btn tc-btn-ghost tc-btn-sm"} onClick={()=>setStatusFilter(key)}>{label} ({count})</button>;
+        })}
+      </div>
+
+      <table className="tc-table">
+        <thead><tr><th>Orden</th><th>Cliente</th><th>Marca / Modelo</th><th>IMEI</th><th>Sucursal</th><th>Estado</th><th>Técnico</th><th></th></tr></thead>
+        <tbody>
+          {filtered.map(o=>(
+            <tr key={o.id}>
+              <td>{o.order_number}</td>
+              <td>{customersById.get(o.customer_id||"")?.full_name||"—"}</td>
+              <td>{o.brand} {o.model}</td>
+              <td className="muted">{o.imei||"—"}</td>
+              <td className="muted">{o.origin_branch||"—"}</td>
+              <td><span className="tc-badge">{CELULARES_STATUS_LABEL[o.status]||o.status}</span></td>
+              <td>{technicians.find(t=>t.id===o.technician_id)?.full_name||"Sin asignar"}</td>
+              <td><button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={()=>onOpenOrder(o)}>Gestionar</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!filtered.length&&<EmptyState title="Sin tickets" message="No hay unidades de Celulares con este filtro." icon={<ClipboardList size={20}/>} />}
+    </div>
+  );
+}
+
+function ApprovalCallsSection({workOrderId}:{workOrderId:string}){
+  const [calls,setCalls]=useState<{id:string;agent_name:string|null;call_date:string|null;discount_offered:number|null;status_cc:string;channel:string|null;rejection_reason:string|null}[]|null>(null);
+  const [statusCc,setStatusCc]=useState("aprobado");
+  const [channel,setChannel]=useState("llamada");
+  const [rejectionReason,setRejectionReason]=useState("tiempo_espera");
+  const [discount,setDiscount]=useState("");
+  const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    fetch(`/api/crm/celulares/approval-calls?work_order_id=${workOrderId}`).then(r=>r.json()).then(p=>setCalls(p.calls||[])).catch(()=>setCalls([]));
+  },[workOrderId]);
+
+  async function register(){
+    setSaving(true);
+    const response=await fetch("/api/crm/celulares/approval-calls",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      work_order_id:workOrderId, status_cc:statusCc, channel, discount_offered:discount?Number(discount):undefined,
+      rejection_reason:statusCc==="rechazado"?rejectionReason:undefined,
+    })});
+    if(response.ok){
+      const refreshed=await fetch(`/api/crm/celulares/approval-calls?work_order_id=${workOrderId}`).then(r=>r.json());
+      setCalls(refreshed.calls||[]);
+      setDiscount("");
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="tc-notice">
+      <strong style={{display:"block",marginBottom:6}}>Llamadas de aprobación de presupuesto</strong>
+      {calls===null?<span className="muted">Cargando...</span>:calls.length===0?<span className="muted">Ninguna registrada todavía.</span>:calls.map(c=>(
+        <div key={c.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderTop:"1px solid var(--border)"}}>
+          <span>{c.agent_name} · {c.channel||"—"} · {c.call_date?new Date(c.call_date).toLocaleDateString("es-DO"):"—"}</span>
+          <span style={{color:c.status_cc==="aprobado"?"var(--good)":c.status_cc==="rechazado"?"var(--bad)":"var(--accent-2)"}}>{c.status_cc}{c.rejection_reason?` (${c.rejection_reason.replace("_"," ")})`:""}</span>
+        </div>
+      ))}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10,alignItems:"flex-end"}}>
+        <label>Resultado<select className="tc-select" value={statusCc} onChange={e=>setStatusCc(e.target.value)}>
+          <option value="aprobado">Aprobado</option>
+          <option value="rechazado">Rechazado</option>
+          <option value="pendiente">Pendiente</option>
+        </select></label>
+        <label>Vía<select className="tc-select" value={channel} onChange={e=>setChannel(e.target.value)}>
+          <option value="llamada">Llamada</option>
+          <option value="correo">Correo</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="teams">Teams</option>
+          <option value="pago_azul">Pago Azul</option>
+        </select></label>
+        {statusCc==="rechazado"&&<label>Razón<select className="tc-select" value={rejectionReason} onChange={e=>setRejectionReason(e.target.value)}>
+          <option value="tiempo_espera">Tiempo de espera</option>
+          <option value="costo_elevado">Costo elevado</option>
+          <option value="otro">Otro</option>
+        </select></label>}
+        <label>Descuento ofrecido<input className="tc-input" type="number" value={discount} onChange={e=>setDiscount(e.target.value)}/></label>
+        <button type="button" className="tc-btn tc-btn-sm" disabled={saving} onClick={register}>Registrar llamada</button>
+      </div>
+    </div>
   );
 }
 
