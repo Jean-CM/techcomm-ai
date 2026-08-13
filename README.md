@@ -1,4 +1,4 @@
-# Techcomm Nexus AI / Techcomm Operations
+# Techcomm Operations
 
 > Plataforma operativa y de inteligencia artificial para la gestión integral de atención al cliente, órdenes de servicio, técnicos, inventario, cotizaciones, comunicaciones y analítica de Techcomm Wireless.
 
