@@ -1,238 +1,530 @@
 # Techcomm Operations
 
-> Plataforma operativa y de inteligencia artificial para la gestión integral de atención al cliente, órdenes de servicio, técnicos, inventario, cotizaciones, comunicaciones y analítica de Techcomm Wireless.
+> Plataforma modular de operaciones, atención al cliente e inteligencia artificial diseñada para centralizar procesos de servicio, comunicaciones, órdenes de trabajo, técnicos, inventario, cotizaciones, pagos, evidencias, analítica e integraciones empresariales.
 
-**Estado del proyecto:** desarrollo activo / definición funcional con socio  
+**Estado del proyecto:** desarrollo activo / definición funcional y comercial  
 **Última actualización:** 13 de agosto de 2026  
 **Repositorio principal:** `Jean-CM/techcomm-ai`  
 **Branch estable:** `main`
 
 ---
 
-## 1. Visión del proyecto
+## 1. Visión del producto
 
-Techcomm Operations es la plataforma tecnológica central propuesta para **SERVICIOS DE TELECOMUNICACIONES TECHCOMM, S.R.L.**, comercialmente **Techcomm Wireless**, con foco inicial en la operación de atención al cliente y servicio técnico en República Dominicana.
+Techcomm Operations se está construyendo como una **plataforma operativa reutilizable y extensible**, no como una solución rígida para una sola empresa.
 
-El objetivo no es construir un simple chatbot ni una agenda aislada. La plataforma busca centralizar y orquestar el ciclo completo de servicio:
+El primer caso real de implementación se está levantando con Techcomm Wireless, pero la arquitectura debe permitir que el mismo núcleo pueda adaptarse posteriormente a otras empresas, industrias, marcas, talleres, distribuidores, operaciones de campo o negocios de servicio sin rehacer el producto desde cero.
 
-1. Recepción del contacto del cliente.
-2. Identificación del cliente y del equipo.
-3. Validación del tipo de servicio y garantía.
-4. Triage y diagnóstico preliminar.
-5. Solicitud y recepción de evidencias.
-6. Cotización cuando aplique.
-7. Confirmación de pago cuando corresponda.
-8. Validación o solicitud de repuestos.
-9. Programación de visita.
-10. Asignación manual de técnico en la fase actual.
-11. Ejecución del servicio.
-12. Evidencias de trabajo y aceptación/rechazo del cliente.
-13. Cierre de orden.
-14. Encuesta, satisfacción y NPS.
-15. Reportería operativa, financiera y gerencial.
+El principio rector es:
 
-La arquitectura se está diseñando para soportar crecimiento, nuevos canales, automatización progresiva y sustitución de proveedores sin rehacer el núcleo del producto.
+> **El núcleo del producto debe ser genérico; las reglas específicas de cada empresa deben ser configurables.**
+
+Por eso, conceptos como clientes, órdenes, garantías, técnicos, inventario, cotizaciones, canales, pagos, documentos, evidencias, roles, KPIs e integraciones deben mantenerse desacoplados de una empresa concreta siempre que sea técnicamente razonable.
 
 ---
 
-## 2. Fuente funcional principal actual
+## 2. Objetivo general
 
-El alcance funcional V1 se está contrastando con el documento de descubrimiento entregado por Techcomm y completado por **Wendy Rodríguez el 11 de agosto de 2026**.
+La plataforma busca orquestar el ciclo completo de una operación de servicio:
 
-Ese documento corresponde al primer levantamiento formal del servicio de **Atención al Cliente**. Existe un segundo documento pendiente de entrega por parte del socio; cuando sea recibido se realizará un análisis de delta para actualizar alcance, costos, dependencias y prioridades sin reiniciar el trabajo ya realizado.
+1. Recepción del contacto.
+2. Identificación del cliente, cuenta o empresa.
+3. Registro del producto, activo o servicio relacionado.
+4. Clasificación del requerimiento.
+5. Validación de reglas de cobertura, contrato o garantía.
+6. Triage o diagnóstico preliminar.
+7. Solicitud y recepción de documentos o evidencias.
+8. Cotización cuando aplique.
+9. Confirmación de autorización o pago.
+10. Validación de materiales, repuestos o inventario.
+11. Programación.
+12. Asignación de personal o técnico.
+13. Ejecución del trabajo.
+14. Captura de tiempos, evidencias y firma/aceptación.
+15. Cierre del caso u orden.
+16. Encuesta de satisfacción.
+17. Analítica operativa, financiera y gerencial.
 
-### Datos operativos declarados en el primer levantamiento
-
-- Operación actual en República Dominicana.
-- Equipo interno aproximado: 2 atención a clientes, 2 atención a fabricantes y tiendas, 2 soporte técnico externo, 3 técnicos internos, 1 supervisor de atención y 1 supervisor técnico.
-- 5 cuadrillas externas subcontratadas en Santo Domingo con cobertura nacional.
-- 1 cuadrilla externa subcontratada en Santiago.
-- Capacidades indicadas: 47 instalaciones/día, 36 diagnósticos/día y 30 reparaciones/día.
-- La empresa se encuentra en proceso de mejora operativa para reducir carga manual y optimizar la operación.
-
----
-
-## 3. Servicios y equipos cubiertos
-
-### Tipos de servicio
-
-- Instalación de electrodomésticos.
-- Mantenimiento de electrodomésticos.
-- Reparación de electrodomésticos.
-- Desinstalación de electrodomésticos.
-
-### Categorías principales
-
-Televisores, monitores TV, neveras, aires acondicionados, lavadoras, estufas, secadoras, lavadoras-secadoras, lavavajillas, hornos, microondas, microondas-extractor, pequeños electrodomésticos y equipos relacionados.
-
-### Marcas y comercios mencionados
-
-LG, Samsung, TCL, Black & Decker y otras marcas según artículo. Entre los comercios mencionados están Grupo Ramos, Plaza Lama y Ochoa.
-
-Las tarifas pueden variar según equipo, servicio y nivel de reparación.
+El flujo exacto puede variar por empresa y debe parametrizarse mediante reglas de negocio.
 
 ---
 
-## 4. Modelo de garantías
+## 3. Estrategia de producto multiempresa
 
-La plataforma debe soportar:
+La plataforma se diseña desde ahora para poder evolucionar hacia una arquitectura **multi-organización / multi-tenant**.
 
-- **Garantía fabricante**: cobertura según fecha de venta si existe factura o fecha de fabricación cuando no existe.
-- **Garantía fabricante parcial**: extensión sobre piezas específicas.
-- **Garantía fabricante promoción**: condiciones extraordinarias informadas por fabricante.
-- **Garantía tienda/distribuidor**: trabajos asumidos por comercio/distribuidor cuando corresponda.
-- **Garantía Techcomm**: 30 días sobre la misma reparación luego de la entrega.
-- **Fuera de garantía**: equipos sin cobertura o excluidos por maltrato, rotura, humedad o intervención no autorizada.
+Cada organización podrá tener progresivamente su propia configuración de:
 
-Estas reglas deben evolucionar hacia un motor auditable y configurable.
+- Nombre comercial e identidad visual.
+- Usuarios y roles.
+- Sucursales, almacenes y zonas.
+- Tipos de servicio.
+- Productos, activos o equipos.
+- Reglas de garantía/cobertura.
+- Tarifarios.
+- Impuestos.
+- Moneda.
+- Formas de pago.
+- Técnicos y proveedores.
+- Horarios y capacidad operativa.
+- Estados de orden.
+- Reglas de aprobación.
+- Inventario.
+- Plantillas de mensajes.
+- Canales de atención.
+- KPIs.
+- Integraciones externas.
+- Reglas de IA.
+- Políticas de retención y auditoría.
+
+### Regla arquitectónica
+
+No se deben codificar nombres de clientes, tarifas, teléfonos, garantías, centros, marcas o reglas comerciales directamente en el núcleo cuando puedan convertirse en configuración.
 
 ---
 
-## 5. Flujo de atención objetivo
+## 4. Implementación de referencia actual — Techcomm Wireless
 
-### Canales
+El primer levantamiento formal corresponde a **SERVICIOS DE TELECOMUNICACIONES TECHCOMM, S.R.L. / Techcomm Wireless**, República Dominicana.
 
-WhatsApp, llamadas telefónicas, correo electrónico, página del fabricante, redes sociales, call center y portal/web en fases posteriores.
+El documento de descubrimiento recibido y completado el 11 de agosto de 2026 constituye la principal fuente funcional V1 para este caso de implementación. Existe un segundo documento pendiente del socio.
+
+Los requerimientos específicos de Techcomm se utilizan para validar la plataforma en un escenario real, pero deben implementarse de forma que las capacidades reutilizables permanezcan disponibles para futuras organizaciones.
+
+### Datos operativos declarados en el caso Techcomm
+
+- Operación en República Dominicana.
+- Atención a clientes, fabricantes y tiendas.
+- Soporte técnico interno y externo.
+- Supervisión de atención y técnica.
+- Cuadrillas externas en Santo Domingo y Santiago.
+- Cobertura nacional mediante operación propia/subcontratada.
+- Capacidades indicadas de 47 instalaciones, 36 diagnósticos y 30 reparaciones por día.
+
+### Servicios del caso actual
+
+- Instalación.
+- Mantenimiento.
+- Reparación.
+- Desinstalación.
+
+### Equipos del caso actual
+
+Televisores, monitores, neveras, aires acondicionados, lavadoras, estufas, secadoras, lavadoras-secadoras, lavavajillas, hornos, microondas y pequeños electrodomésticos, entre otros.
+
+Estos catálogos deben vivir como datos configurables y no como límites del producto.
+
+---
+
+## 5. Dominios funcionales de la plataforma
+
+### 5.1 Organizaciones y configuración
+
+- Organizaciones/tenants.
+- Perfil empresarial.
+- Sucursales y centros de operación.
+- Usuarios, roles y permisos.
+- Parámetros comerciales.
+- Horarios.
+- Catálogos configurables.
+- Plantillas.
+- Reglas de negocio.
+
+### 5.2 CRM / Customer 360
+
+- Clientes y cuentas.
+- Contactos.
+- Direcciones.
+- Geolocalización.
+- Productos/activos asociados.
+- Historial de servicios.
+- Historial de conversaciones.
+- Documentos y evidencias.
+- Estado de casos abiertos.
+
+### 5.3 Casos y órdenes de servicio
+
+- Registro de solicitud.
+- Tipo de servicio.
+- Canal de origen.
+- Prioridad.
+- Producto/activo.
+- Diagnóstico/triage.
+- Garantía/cobertura.
+- Estados configurables.
+- Agenda.
+- Técnico o responsable.
+- Inventario/repuestos.
+- Pagos.
+- Evidencias.
+- Aceptación/rechazo.
+- Cierre.
+- Reapertura/reingreso.
+- SLA y tiempos.
+
+### 5.4 Garantías, contratos y coberturas
+
+El motor debe soportar múltiples tipos de cobertura y permitir que cada organización configure sus propias reglas.
+
+El caso Techcomm actualmente requiere garantía de fabricante, fabricante parcial, promoción, tienda/distribuidor, garantía propia de reparación y fuera de garantía.
+
+La arquitectura objetivo es un **motor de reglas configurable y auditable**, evitando condicionar el producto a un único modelo de garantía.
+
+### 5.5 Triage e inteligencia artificial
+
+- Captura estructurada de síntomas.
+- Análisis de conversación.
+- Clasificación de intención.
+- Solicitud guiada de evidencias.
+- Diagnóstico preliminar asistido.
+- Sugerencia de próximos pasos.
+- Identificación de posibles materiales/repuestos.
+- Resumen automático.
+- Asistencia al agente humano.
+- Escalamiento.
+- Base de conocimiento por organización.
+
+La IA será asistiva, trazable y desacoplada del proveedor de modelo.
+
+### 5.6 Cotizaciones y aprobaciones
+
+- Cliente/cuenta.
+- Producto/activo.
+- Diagnóstico.
+- Mano de obra.
+- Materiales/repuestos.
+- Transporte/flete.
+- Impuestos.
+- Descuentos.
+- Total.
+- Vigencia.
+- Términos y condiciones.
+- Formas de pago.
+- Aprobación interna cuando aplique.
+- Autorización del cliente.
+- Conversión a orden de trabajo.
+
+Las reglas de aprobación deben ser parametrizables por organización.
+
+### 5.7 Agenda, capacidad y despacho
+
+- Calendario operacional.
+- Capacidad por día/franja.
+- Zonas.
+- Disponibilidad.
+- Especialidad.
+- Carga de trabajo.
+- Inventario requerido.
+- Ruta/distancia.
+- Fecha solicitada.
+- Técnicos internos/externos.
+- Asignación manual.
+- Sugerencia automática futura.
+- Optimización automática futura.
+
+### 5.8 Portal de técnicos / personal de campo
+
+- Agenda asignada.
+- Check-out/salida.
+- Llegada.
+- Inicio/fin.
+- Diagnóstico.
+- Materiales/repuestos utilizados.
+- Fotografías/videos.
+- Documentos.
+- Firma.
+- Aceptación/rechazo.
+- Observaciones.
+- Geolocalización cuando aplique.
+- Operación offline futura cuando sea necesaria.
+
+### 5.9 Inventario y logística
+
+- SKU/código/barcode.
+- Categoría/modelo/fabricante.
+- Almacenes.
+- Existencia física.
+- Disponible.
+- Reservado.
+- Pendiente.
+- Mínimos/máximos.
+- Reorden.
+- Reserva por orden.
+- Entrega a técnico.
+- Consumo.
+- Devolución.
+- Compras.
+- Proveedores.
+- Movimientos.
+- Auditoría.
+- Integración con ERP o fuente maestra.
+
+### 5.10 Pagos, facturación y fiscalidad
+
+- Efectivo.
+- Transferencia.
+- Tarjeta.
+- Pagos anticipados/parciales/finales.
+- Balance pendiente.
+- Facturación.
+- Impuestos.
+- Integración fiscal.
+- Integración con ERP/contabilidad.
+
+Las reglas fiscales serán específicas por país/empresa y deben mantenerse fuera del núcleo genérico.
+
+### 5.11 Satisfacción y calidad
+
+- Encuestas.
+- CSAT.
+- NPS.
+- Razones de insatisfacción.
+- Reingresos.
+- First-Time-Fix / First-Visit Resolution.
+- Auditoría de llamadas y conversaciones.
+- Evaluación de técnicos/agentes.
+
+---
+
+## 6. Communications Gateway — arquitectura desacoplada
+
+La plataforma no debe depender de un solo proveedor de comunicaciones.
 
 ```text
-Cliente
-  ↓
-Contacto / solicitud
-  ↓
-Registro de cliente + equipo + servicio
-  ↓
-Validación de garantía
-  ↓
-¿Aplica diagnóstico con costo?
-  ├─ Sí → cotización + pago adelantado
-  └─ No
-  ↓
-Triage / diagnóstico preliminar
-  ↓
-Fotos / videos / factura / evidencias
-  ↓
-¿Se identifica falla y repuesto?
-  ├─ Sí → validar inventario / solicitar pieza
-  └─ No → coordinar visita diagnóstica
-  ↓
-Agenda y asignación manual de técnico
-  ↓
-Servicio en sitio / taller
-  ↓
-Evidencias + formulario firmado
-  ↓
-Aceptación o rechazo
-  ↓
-Cierre de orden
-  ↓
-Satisfacción / NPS / KPIs
+                       CLIENTES
+                          │
+           ┌──────────────┼──────────────┐
+           │              │              │
+        WhatsApp       Telefonía      Web/Email
+           │              │              │
+           ▼              ▼              ▼
+       Meta/BSP        SIP/Carrier     API/SMTP
+           │              │              │
+           └──────────────┼──────────────┘
+                          ▼
+               Communications Gateway
+                          │
+          ┌───────────────┼────────────────┐
+          ▼               ▼                ▼
+       AI/LLM          Voice AI         Reglas
+          │               │                │
+          └───────────────┼────────────────┘
+                          ▼
+                 Operations Platform
+                          │
+                          ▼
+                 PostgreSQL / Supabase
 ```
 
----
+### Abstracciones internas
 
-## 6. Módulos funcionales
-
-### Atención y CRM
-Clientes/Customer 360, contactos, direcciones/geolocalización, equipos, órdenes, conversaciones, evidencias y estado del caso.
-
-### Órdenes de servicio
-Solicitud, tipo de servicio/cliente, marca/modelo/serial, garantía, triage, estados, programación, técnico, repuestos, pagos, evidencias, aceptación/rechazo, cierre y reingreso.
-
-### Triage e IA
-Captura de síntomas, análisis de conversación, solicitud guiada de evidencias, diagnóstico preliminar asistido, posibles repuestos, resumen, intención, asistencia al agente y escalamiento humano. La IA será asistiva y auditable.
-
-### Cotizaciones
-Cliente, equipo, diagnóstico, mano de obra, repuestos, flete, materiales, impuestos, total, términos, formas de pago y autorización. Las cotizaciones estándar no requieren aprobación del supervisor; casos fuera de estándar/descuentos sí pueden requerirla. Una cotización autorizada y con pagos correspondientes podrá convertirse en orden de trabajo.
-
-### Agenda y despacho
-La asignación de técnicos **permanece manual en la fase actual**. El coordinador debe disponer de ubicación, equipo, garantía, síntomas, evidencias, triage, diagnóstico, distancia/ruta, fecha, disponibilidad, repuestos, stock, herramientas, pagos y cobros pendientes. La asignación automática queda como evolución futura.
-
-### Portal del técnico
-Agenda, salida, llegada, trabajo, datos del caso, diagnóstico, repuestos, evidencias, formulario firmado, aceptación/rechazo y finalización condicionada a evidencias obligatorias. Los técnicos todavía no tienen smartphones corporativos; sus dispositivos personales son mayormente Android. Se evaluará operación offline según alcance final.
-
-### Kilometraje y rutas
-La operación reporta cálculo desde Casa Central Techcomm Pantoja mediante Google Maps, ida y vuelta. Para fuera de garantía fuera del Gran Santo Domingo se reporta referencia de **RD$20/km**, sujeta a acuerdos por cliente.
-
-### Inventario y repuestos
-SKU/código/barcode/modelo/fabricante, existencia física, disponible/reservado/pendiente, solicitud y reserva por OS, entrega al técnico, consumo, compras, prepago fuera de garantía, movimientos, auditoría, reorden, mínimos/máximos, proveedores e integración externa. Los técnicos no mantienen inventario fijo en vehículos.
-
-### Pagos y facturación
-Medios declarados: transferencia, tarjeta y efectivo. Diagnóstico, flete y repuesto se pagan adelantados; mano de obra después del servicio. Se requieren NCF para crédito fiscal y consumidor final. La integración fiscal definitiva depende del sistema de facturación existente.
-
----
-
-## 7. Comunicaciones — Arquitectura B optimizada
-
-Principio: **Techcomm Operations debe ser el cerebro. Los proveedores de canal deben ser reemplazables.**
+El dominio debe utilizar interfaces como:
 
 ```text
-                    CLIENTES
-                       │
-          ┌────────────┼─────────────┐
-          │            │             │
-       WhatsApp     Teléfono       Web/Email
-          │            │             │
-          ▼            ▼             ▼
-      Meta API      SIP/Carrier    API/SMTP
-          │            │             │
-          └────────────┼─────────────┘
-                       ▼
-          Techcomm Communications Gateway
-                       │
-          ┌────────────┼──────────────┐
-          ▼            ▼              ▼
-       AI/LLM       Voice AI       Reglas
-          │            │              │
-          └────────────┼──────────────┘
-                       ▼
-              Techcomm Operations
-                       │
-                       ▼
-              PostgreSQL / Supabase
+sendMessage()
+sendWhatsApp()
+makeCall()
+startAICall()
+sendEmail()
 ```
 
-### WhatsApp
-Meta WhatsApp Business Platform / Cloud API directa como opción preferida; webhooks propios; mensajes/archivos/eventos registrados; estrategia WhatsApp-first. WhatsApp Calling queda sujeto a validación final del número/WABA y disponibilidad.
+En lugar de acoplar cada módulo a Twilio, Meta, Telnyx, OpenAI, ElevenLabs u otro proveedor específico.
 
-### Telefonía
-Número corporativo/carrier dominicano, SIP Trunk cuando sea viable y capa programable desacoplada. Se evaluarán Twilio BYOC, Telnyx u otras alternativas. PSTN continúa como canal esencial y fallback.
+### Estrategia inicial de canales
 
-### Evolución
-Fase inicial: `Carrier RD → SIP → capa programable/BYOC → Techcomm Operations/AI`.
+- WhatsApp Business Platform / Cloud API directa cuando sea conveniente.
+- Webhooks propios.
+- SIP/carrier para telefonía empresarial cuando corresponda.
+- BYOC/capa programable según costo y complejidad.
+- PSTN como canal de respaldo y accesibilidad.
+- Voz IA desacoplada.
+- Proveedores sustituibles mediante adapters.
 
-Fase futura de alto volumen: `Carrier RD → SIP → Voice Gateway propio/Asterisk/FreeSWITCH → Techcomm Operations/AI`.
+### Evolución de alto volumen
 
-No se recomienda infraestructura SIP propia desde el primer día si el ahorro no compensa complejidad, seguridad y mantenimiento.
-
-### Communications Gateway
-La aplicación debe utilizar abstracciones como `sendMessage()`, `sendWhatsApp()`, `makeCall()`, `startAICall()` y `sendEmail()`, evitando acoplar el dominio a un proveedor concreto.
-
----
-
-## 8. Stack tecnológico
-
-- **Aplicación:** Next.js, TypeScript, Tailwind CSS, Node.js.
-- **Datos/Auth:** Supabase, PostgreSQL, Supabase Auth/Storage, RLS.
-- **IA/automatización:** OpenAI u otros modelos según función/costo, orquestador de IA, n8n y voz desacoplada.
-- **Infraestructura:** Vercel, Cloudflare, Docker y opción híbrida/self-hosted.
-- **Observabilidad:** Sentry, Better Stack/equivalente, logs, auditoría, backups y health monitoring.
+La plataforma podrá evolucionar desde servicios administrados/BYOC hacia infraestructura SIP/Voice Gateway propia cuando el volumen y ahorro justifiquen la complejidad.
 
 ---
 
-## 9. Estado del producto
+## 7. Stack tecnológico actual
+
+### Aplicación
+
+- Next.js.
+- TypeScript.
+- Tailwind CSS.
+- Node.js.
+
+### Datos y autenticación
+
+- Supabase.
+- PostgreSQL.
+- Supabase Auth.
+- Supabase Storage.
+- Row Level Security.
+
+### IA y automatización
+
+- OpenAI u otros modelos según costo/capacidad.
+- Orquestador de IA.
+- n8n.
+- Voz IA configurable.
+
+### Infraestructura
+
+- Vercel.
+- Cloudflare.
+- Docker.
+- Arquitectura híbrida/self-hosted para componentes que lo requieran.
+
+### Observabilidad
+
+- Sentry.
+- Better Stack o equivalente.
+- Logs.
+- Auditoría.
+- Backups.
+- Health monitoring.
+
+---
+
+## 8. Estrategia de datos multi-tenant
+
+La evolución del modelo de datos debe contemplar separación por organización.
+
+Patrón objetivo conceptual:
+
+```text
+organization_id
+   ├── users
+   ├── customers
+   ├── assets
+   ├── work_orders
+   ├── technicians
+   ├── inventory
+   ├── quotes
+   ├── payments
+   ├── conversations
+   ├── documents
+   ├── integrations
+   └── settings
+```
+
+Principios:
+
+- Aislamiento lógico por tenant.
+- RLS por organización.
+- Configuración por tenant.
+- Auditoría por tenant.
+- Integraciones independientes.
+- Storage segmentado.
+- Nunca mezclar información entre empresas.
+
+La migración definitiva a multi-tenant deberá planificarse cuidadosamente antes de incorporar una segunda organización productiva.
+
+---
+
+## 9. Integraciones empresariales
+
+El producto debe poder conectarse a distintas fuentes mediante adapters/conectores:
+
+- REST API.
+- Webhooks.
+- SQL Server.
+- PostgreSQL.
+- MySQL.
+- Oracle.
+- Excel/XLSX/CSV.
+- SFTP/file drop.
+- SharePoint/OneDrive.
+- ERP.
+- CRM.
+- Facturación.
+- Sistemas de inventario.
+- Sistemas legacy en redes privadas.
+
+Para redes privadas se contempla un agente/conector con autenticación y firma HMAC.
+
+### Caso Techcomm
+
+El sistema interno mencionado actualmente es **Andreina**. Su integración queda como adaptación específica de la primera implementación, no como dependencia del núcleo del producto.
+
+---
+
+## 10. Seguridad
+
+- Autenticación robusta.
+- Autorización server-side.
+- Roles y permisos.
+- Aislamiento multi-tenant.
+- RLS.
+- Service credentials solo servidor.
+- Secret management.
+- HTTPS/TLS.
+- HMAC para integraciones.
+- Protección contra replay.
+- Validación de inputs.
+- Límites de payload.
+- Storage privado.
+- URLs firmadas temporales.
+- Audit logs.
+- Logout por inactividad.
+- Password reset/first login.
+- Security headers.
+- Dependency management.
+- Backups y pruebas de restauración.
+- MFA/WAF/CSP según criticidad.
+- Retención configurable.
+
+El repositorio no debe contener credenciales, tokens, información de clientes, grabaciones ni datos reales sensibles.
+
+---
+
+## 11. KPIs configurables
+
+La plataforma debe permitir que cada organización seleccione y defina sus KPIs.
+
+Catálogo inicial:
+
+- TAT.
+- Tiempo de primera respuesta.
+- Contactabilidad.
+- Programación.
+- Productividad.
+- Cumplimiento de agenda/ruta.
+- First-Time-Fix.
+- Reingresos.
+- Tiempo de diagnóstico.
+- Efectividad del triage.
+- SLA.
+- Disponibilidad de inventario.
+- Rotación.
+- Lead time de abastecimiento.
+- Facturación.
+- Ticket promedio.
+- Margen.
+- Aprobación de cotizaciones.
+- Razones de rechazo.
+- Órdenes pendientes.
+- CSAT.
+- NPS.
+
+---
+
+## 12. Estado del producto
 
 Estados oficiales:
 
 - ✅ **Implementado / existente**.
 - 🧪 **En pruebas / validación**.
 - 🟡 **Diseñado / aprobado conceptualmente**.
-- 🔴 **Pendiente de desarrollo o información**.
+- 🔴 **Pendiente**.
 
 ### Implementado o existente
 
-- Base de Techcomm Operations.
+- Base de la plataforma.
 - Dashboard operativo.
-- Clientes / CRM.
+- CRM/clientes.
 - Agenda.
 - Técnicos.
 - Órdenes.
@@ -241,165 +533,200 @@ Estados oficiales:
 - Health monitor.
 - Controles de agenda.
 - Autenticación/base de seguridad.
-- Estructura Supabase/PostgreSQL.
-- Integración/arquitectura externa preparada.
-- Documentación técnica del repositorio.
+- Supabase/PostgreSQL.
+- Arquitectura de integración externa.
+- Documentación técnica.
 
 ### En pruebas
 
-- Inventario/catálogo de mayor volumen.
-- Pruebas con datasets sintéticos de 1,000 y 5,000 SKU.
+- Inventario/catálogo de alto volumen.
+- Datasets sintéticos de 1,000 y 5,000 SKU.
 - Búsqueda, filtros, stock y escalabilidad.
-- Pruebas de aceptación y carga documentadas.
+- Pruebas de aceptación/carga.
 
-### Diseñado / por implementar o completar
+### Diseñado / pendiente de completar
 
-- Motor completo de garantías.
-- Triage formal y reglas de IA.
-- Cotización completa.
-- Pagos y aprobación.
-- Flujo completo de repuestos.
+- Soporte multi-tenant formal.
+- Motor de reglas/configuración por organización.
+- Garantías/coberturas configurables.
+- Triage formal e IA.
+- Cotizaciones completas.
+- Pagos/aprobaciones.
+- Repuestos/logística completa.
 - Portal técnico final.
 - Evidencias/firma.
-- NPS.
-- Integración fiscal/NCF.
-- Integración definitiva con Andreina.
-- Meta Cloud API directa.
+- NPS/CSAT.
+- Fiscalidad configurable.
 - Communications Gateway.
+- Meta Cloud API.
 - SIP/BYOC/carrier.
 - WhatsApp Calling.
-- KPIs gerenciales completos.
-- Motor futuro de asignación automática.
+- KPIs configurables completos.
+- Asignación inteligente futura.
+- White-labeling futuro.
 
 ---
 
-## 10. Integraciones
+## 13. Modelo económico del producto
 
-### Andreina
-Sistema interno actual mencionado por Techcomm para gestionar órdenes, técnicos, cotizaciones, facturación e inventario. La integración real depende de documentación técnica pendiente: motor de BD, acceso, tablas/vistas/API, diccionario de datos, autenticación, red y volumen.
+Toda implementación debe separar:
 
-### Inventario / ERP
-Patrones preparados/documentados para Excel/XLSX/CSV, SQL Server, PostgreSQL, MySQL, Oracle, REST API, SFTP/file drop, SharePoint/OneDrive y agente de red privada con firma HMAC.
+1. Desarrollo/configuración inicial.
+2. Adaptaciones específicas del cliente.
+3. Integraciones.
+4. Infraestructura fija.
+5. Consumo variable.
+6. Soporte/mantenimiento.
+7. Módulos opcionales.
+8. Contingencia.
+9. Margen comercial.
 
----
+### Costos variables
 
-## 11. Seguridad
-
-Supabase Auth, autorización server-side, owner/admin checks, aislamiento de técnicos, RLS, credenciales solo servidor, secretos fuera de tablas, HMAC SHA-256, protección replay, HTTPS/TLS, límites de payload, validación, almacenamiento privado, URLs firmadas temporales, logs de auditoría, logout por inactividad, password reset/first login, security headers, mantenimiento de dependencias y backup/restore testing.
-
-Pendiente definir con el socio: MFA/WAF/CSP si aplica, retención de datos, retención de grabaciones y requisitos regulatorios definitivos.
-
----
-
-## 12. KPIs objetivo
-
-TAT, tiempo de contacto inicial, programación, productividad, cumplimiento de ruta, First-Time-Fix/First-Visit Resolution, reingresos, duración de diagnóstico, efectividad del triage, disponibilidad/rotación/faltantes de inventario, lead time, facturación, ticket promedio, margen, aprobación/rechazo de presupuestos, órdenes pendientes, satisfacción y NPS.
-
----
-
-## 13. Modelo económico
-
-El presupuesto debe separar obligatoriamente:
-
-1. Implementación/desarrollo inicial.
-2. Infraestructura mensual fija.
-3. Consumo variable.
-4. Soporte/mantenimiento.
-5. Módulos opcionales/futuros.
-6. Contingencia de integración.
-7. Margen comercial.
-
-### Costos variables a modelar
-
-- WhatsApp/Meta.
+- WhatsApp/Meta/BSP.
 - Telefonía PSTN/SIP.
 - WhatsApp Calling.
 - Voz IA.
-- OpenAI/modelos.
+- LLM/IA.
 - Transcripción.
 - Grabaciones.
-- Storage de fotos/videos/documentos.
+- Storage.
 - Maps/geocoding/routes.
-- Email/SMS si aplica.
-- Vercel/Supabase overages.
+- Email/SMS.
+- Hosting/DB overages.
 - Logs/monitoring/backups.
 
-### Escenarios
+### Escenarios de dimensionamiento
 
-Se modelarán al menos 1,000, 5,000, 10,000 y 25,000 casos/mes, calculando mensajes, llamadas, minutos, IA, storage, infraestructura, costo/caso, costo/conversación, costo/minuto, OPEX mensual/anual y precio/margen recomendado.
+Se modelarán al menos 1,000, 5,000, 10,000 y 25,000 casos mensuales, con costo por caso, conversación, minuto, usuario, organización y OPEX mensual/anual.
 
----
-
-## 14. Estrategia comercial
-
-No presentar un único número que mezcle todo. La propuesta debe separar inversión inicial, mensualidad/plataforma, consumo incluido, consumo adicional, soporte y opcionales. Se definirán precio mínimo, precio objetivo y precio premium/negociación.
-
-Los cargos operativos que Techcomm facture a sus clientes finales no deben confundirse con CAPEX/OPEX tecnológico de Techcomm Operations.
+El modelo económico debe permitir reutilizar el producto para nuevas organizaciones y separar claramente **costo del núcleo**, **costo de adaptación** y **costo operativo por cliente**.
 
 ---
 
-## 15. Roadmap
+## 14. Estrategia comercial y expansión
 
-### Fase 1 — MVP operativo
-Atención/CRM, clientes, OS, garantía base, triage, cotización, agenda manual, técnicos, evidencias, inventario básico, dashboard, autenticación y auditoría.
+El proyecto debe poder evolucionar desde una implementación inicial hacia un producto comercializable.
 
-### Fase 2 — Integración y automatización
-Andreina, facturación/NCF, inventario avanzado, Meta WhatsApp, Communications Gateway, telefonía/SIP, pagos, reportería avanzada, automatizaciones y comunicaciones proactivas.
+Modelos futuros posibles:
 
-### Fase 3 — Inteligencia operacional
-Asignación inteligente, optimización de rutas, predicción de repuestos, forecasting, IA avanzada, analítica predictiva y optimización automática de canales/costos.
+- Implementación + mensualidad.
+- SaaS por organización.
+- SaaS por usuario.
+- SaaS por volumen de órdenes/interacciones.
+- Licenciamiento enterprise.
+- White-label.
+- Instalación privada/self-hosted.
+- Servicios profesionales de integración.
+- Soporte premium/SLA.
+
+La primera implementación sirve para validar el producto, crear componentes reutilizables, identificar costos reales y construir una base que permita vender futuras implementaciones con menor costo marginal.
 
 ---
 
-## 16. Información pendiente del socio
+## 15. Roadmap general
 
-Segundo documento funcional; prioridades; presupuesto; fecha objetivo; aprobadores; volúmenes mensuales de casos/órdenes, llamadas y WhatsApp; duración promedio; emails; visitas; evidencias; usuarios/roles; Andreina; facturación; retención; SLA; escalamiento humano; políticas regulatorias; promociones; descuentos; devoluciones; horarios excepcionales; backup/DR.
+### Fase 1 — Núcleo operativo
 
-Estos pendientes no impiden construir una estimación V1 parametrizada, pero impiden cerrar el precio contractual definitivo sin supuestos.
+CRM, órdenes, agenda, técnicos, inventario base, conversaciones, autenticación, seguridad, dashboard y auditoría.
+
+### Fase 2 — Automatización e integración
+
+Reglas configurables, cotizaciones, garantías/coberturas, pagos, evidencias, Communications Gateway, WhatsApp, telefonía, integraciones empresariales, reportería avanzada.
+
+### Fase 3 — Productización
+
+Multi-tenancy formal, configuración por organización, onboarding, módulos activables, billing, white-label, administración multiempresa y plantillas sectoriales.
+
+### Fase 4 — Inteligencia operacional
+
+Asignación inteligente, optimización de rutas, predicción de demanda/repuestos, forecasting, analítica predictiva, IA avanzada y optimización automática de canales/costos.
+
+---
+
+## 16. Información pendiente de la primera implementación
+
+Para cerrar costos y alcance contractual del caso Techcomm siguen pendientes, entre otros:
+
+- Segundo documento funcional.
+- Prioridades.
+- Presupuesto disponible.
+- Fecha objetivo.
+- Aprobadores.
+- Volúmenes de casos.
+- Llamadas/minutos.
+- WhatsApp/mensajes.
+- Emails.
+- Visitas.
+- Evidencias.
+- Usuarios/roles.
+- Información técnica de Andreina.
+- Sistema de facturación.
+- Retención.
+- SLA.
+- Escalamiento humano.
+- Requisitos regulatorios.
+- Backup/DR.
+
+Estos elementos pertenecen a la implementación inicial y no deben convertirse automáticamente en reglas globales del producto.
 
 ---
 
 ## 17. Documentación del repositorio
 
-La carpeta `docs/` contiene documentación especializada, incluyendo `BUDGET_MASTER_SCOPE.md`, `ACCEPTANCE_TESTS_V1.md`, `PERFORMANCE_LOAD_TESTING.md`, `SELF_HOSTING.md` y documentación de QA/rediseño UI.
+La carpeta `docs/` contiene documentación especializada, incluyendo:
 
-El README es el **mapa maestro del proyecto**; los documentos especializados contienen el detalle técnico/operativo.
+- `BUDGET_MASTER_SCOPE.md`
+- `ACCEPTANCE_TESTS_V1.md`
+- `PERFORMANCE_LOAD_TESTING.md`
+- `SELF_HOSTING.md`
+- documentación de QA y UI
+
+El README funciona como **mapa maestro del producto y del proyecto**.
 
 ---
 
-## 18. Reglas de proyecto
+## 18. Reglas de ingeniería del proyecto
 
+- Diseñar primero capacidades reutilizables.
+- Separar núcleo de configuración específica.
+- No hardcodear reglas de clientes cuando puedan parametrizarse.
 - No confundir prototipo con producción.
 - No marcar diseñado como implementado.
-- No inventar tarifas ni volúmenes faltantes.
-- Revalidar precios de terceros antes de propuesta final.
+- No inventar tarifas ni volúmenes.
+- Revalidar costos de terceros antes de cotizar.
 - Mantener proveedores desacoplados cuando sea razonable.
-- Seguridad y trazabilidad desde diseño.
-- Automatizar progresivamente sin romper la operación actual.
-- Toda funcionalidad nueva debe mapearse a proceso, costo, riesgo y KPI.
-- El segundo documento del socio se incorporará mediante delta de alcance.
+- Diseñar seguridad y trazabilidad desde el inicio.
+- Preparar aislamiento multi-tenant antes de una segunda empresa productiva.
+- Mapear toda funcionalidad a proceso, costo, riesgo y KPI.
+- Incorporar nuevos clientes mediante configuración/adapters, no forks innecesarios del producto.
 
 ---
 
 ## 19. Repositorio y confidencialidad
 
-El repositorio es actualmente público. No deben almacenarse secrets, tokens, credenciales, datos reales de clientes, grabaciones, documentos confidenciales ni información sensible de producción. Antes de producción debe revisarse la estrategia de visibilidad y acceso del repositorio.
+El repositorio es actualmente público. No deben almacenarse secrets, tokens, credenciales, datos reales de clientes, grabaciones, documentos confidenciales ni información sensible de producción.
+
+Antes de producción y especialmente antes de alojar múltiples organizaciones, debe revisarse la estrategia de visibilidad, acceso, secretos y segregación de ambientes.
 
 ---
 
 ## 20. Próximos pasos
 
-1. Completar modelo de costos V1.
-2. Comparar Meta directo + SIP/BYOC + Telnyx/Twilio/carrier local.
-3. Calcular OPEX por escenario.
-4. Estimar horas y valor de desarrollo por módulo.
-5. Separar costo real, precio comercial y margen.
-6. Recibir segundo documento del socio.
-7. Ejecutar delta V1 → V2.
-8. Preparar business case y propuesta final.
+1. Completar la estimación V1 de la primera implementación.
+2. Comparar proveedores de comunicaciones y costos.
+3. Calcular OPEX por volumen.
+4. Estimar horas/valor por módulo.
+5. Separar núcleo reutilizable vs personalización del cliente.
+6. Recibir el segundo documento del socio.
+7. Ejecutar delta de alcance.
+8. Diseñar formalmente `organization_id` / multi-tenancy.
+9. Crear estrategia de configuración por organización.
+10. Preparar business case de la implementación inicial y roadmap de productización.
 
 ---
 
-**Nombre oficial del proyecto: Techcomm Operations.**
+**Nombre actual del proyecto: Techcomm Operations.**  
+**Dirección estratégica: plataforma operativa reutilizable, configurable y preparada para expansión a múltiples organizaciones.**
 
-Este README es un documento vivo y debe actualizarse cuando cambien el alcance, arquitectura, costos, integraciones o decisiones confirmadas con Techcomm.
+Este README es un documento vivo y debe actualizarse cuando cambien el alcance, arquitectura, modelo comercial, integraciones o estrategia de productización.
