@@ -403,6 +403,34 @@ export async function POST(request: Request) {
       if (mapped) await supabase.from("appointments").update(mapped).eq("id", appointmentId);
     }
 
+    // Celulares approval calls — same critical safeguard: a voicemail or
+    // no-answer must never be recorded as an actual approval or rejection.
+    const workOrderId = asString(dynamicVariables.work_order_id);
+    const approvalResult = readNestedString(collected, "approval_result");
+    if (workOrderId) {
+      const statusCc = looksUnreachable ? "pendiente" : approvalResult === "aprobado" ? "aprobado" : approvalResult === "rechazado" ? "rechazado" : "pendiente";
+      const rejectionReason = looksUnreachable ? "tiempo_espera" : approvalResult === "rechazado" ? (readNestedString(collected, "rejection_reason") ?? "otro") : null;
+
+      await supabase.from("approval_calls").insert({
+        organization_id: "e349e921-568f-44b3-a52f-d2850f480264",
+        work_order_id: workOrderId,
+        agent_name: "Agente IA",
+        call_date: new Date().toISOString(),
+        status_cc: statusCc,
+        channel: "llamada",
+        rejection_reason: rejectionReason,
+      });
+
+      if (statusCc === "aprobado") {
+        await supabase.from("work_orders").update({ status: "approved" }).eq("id", workOrderId);
+      } else if (statusCc === "rechazado") {
+        await supabase.from("work_orders").update({ status: "devuelto_cliente" }).eq("id", workOrderId);
+      }
+      // "pendiente" (no contestó / buzón de voz) intentionally leaves the
+      // order in esperando_aprobacion for a human to follow up manually —
+      // matches the partner's real "tiempo de espera" outcome.
+    }
+
     const durationSeconds = Number(
       metadata.call_duration_secs ?? metadata.duration_secs ?? data.call_duration_secs ?? 0
     );
