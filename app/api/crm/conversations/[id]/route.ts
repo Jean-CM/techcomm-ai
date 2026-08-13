@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireOrgRole } from "@/lib/require-org-role";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(
@@ -6,7 +7,9 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const supabase = getSupabaseAdmin();
+  const auth = await requireOrgRole(["owner","admin","manager","agent"]);
+  if ("error" in auth) return auth.error;
+  const supabase = auth.admin!;
 
   // New CRM overview passes a conversation UUID. Keep a legacy fallback for
   // older links that still pass a call_event UUID.

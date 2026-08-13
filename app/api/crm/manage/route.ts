@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireOrgRole } from "@/lib/require-org-role";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type ManagementPayload = {
@@ -26,7 +27,9 @@ export async function POST(request: Request) {
   const secondary = clean(body.secondary);
 
   if (!type || !name) return NextResponse.json({ ok: false, error: "type and name are required" }, { status: 400 });
-  const supabase = getSupabaseAdmin();
+  const auth = await requireOrgRole(["owner","admin","manager","agent"]);
+  if ("error" in auth) return auth.error;
+  const supabase = auth.admin!;
 
   if (type === "Cliente") {
     const phone = normalizePhone(detail);

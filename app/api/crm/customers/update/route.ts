@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireOrgRole } from "@/lib/require-org-role";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type Payload = { id?: string; full_name?: string; phone?: string; address?: string; sector?: string; email?: string };
@@ -15,7 +16,9 @@ export async function POST(request: Request) {
   if (!body.id || !fullName) return NextResponse.json({ ok: false, error: "El cliente y el nombre son requeridos." }, { status: 400 });
   if (!/^(809|829|849)\d{7}$/.test(phone)) return NextResponse.json({ ok: false, error: "El teléfono debe tener 10 dígitos y comenzar con 809, 829 o 849." }, { status: 400 });
 
-  const supabase = getSupabaseAdmin();
+  const auth = await requireOrgRole(["owner","admin","manager","agent"]);
+  if ("error" in auth) return auth.error;
+  const supabase = auth.admin!;
   const { data, error } = await supabase.from("customers").update({
     full_name: fullName,
     phone,

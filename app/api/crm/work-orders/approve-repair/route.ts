@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireOrgRole } from "@/lib/require-org-role";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type Payload = { work_order_id?: string; quote_id?: string; approved?: boolean };
@@ -8,7 +9,9 @@ export async function POST(request: Request) {
   if (!body.work_order_id) return NextResponse.json({ ok: false, error: "La orden es requerida." }, { status: 400 });
 
   const approved = body.approved !== false;
-  const supabase = getSupabaseAdmin();
+  const auth = await requireOrgRole(["owner","admin","manager"]);
+  if ("error" in auth) return auth.error;
+  const supabase = auth.admin!;
   const { data, error } = await supabase.from("work_orders").update({
     customer_repair_approved: approved,
     customer_repair_approved_at: approved ? new Date().toISOString() : null,

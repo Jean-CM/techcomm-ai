@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireOrgRole } from "@/lib/require-org-role";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type CatalogRow = {
@@ -82,7 +83,9 @@ export async function POST(request: Request) {
 
   if (!valid.length) return NextResponse.json({ ok: false, error: "Ninguna fila válida contiene el campo Pieza.", rejected }, { status: 400 });
 
-  const supabase = getSupabaseAdmin();
+  const auth = await requireOrgRole(["owner","admin"]);
+  if ("error" in auth) return auth.error;
+  const supabase = auth.admin!;
   const { data, error } = await supabase.from("products").upsert(valid, { onConflict: "sku" }).select("id,sku");
   if (error) return NextResponse.json({ ok: false, error: error.message, rejected }, { status: 500 });
 

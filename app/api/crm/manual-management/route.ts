@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireOrgRole } from "@/lib/require-org-role";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type Payload = {
@@ -70,7 +71,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "La gestión es requerida." }, { status: 400 });
   }
 
-  const supabase = getSupabaseAdmin();
+  const auth = await requireOrgRole(["owner","admin","manager","agent"]);
+  if ("error" in auth) return auth.error;
+  const supabase = auth.admin!;
   const { customer, error: customerError } = await resolveCustomer(supabase, body);
   if (customerError || !customer) {
     return NextResponse.json({ ok: false, error: customerError?.message || "No fue posible identificar al cliente." }, { status: 400 });

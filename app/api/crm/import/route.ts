@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireOrgRole } from "@/lib/require-org-role";
 import * as XLSX from "xlsx";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
@@ -58,7 +59,9 @@ export async function POST(request: Request) {
   });
 
   if (!records.length) return NextResponse.json({ ok:false,error:"El archivo no contiene filas válidas." }, { status:400 });
-  const supabase = getSupabaseAdmin();
+  const auth = await requireOrgRole(["owner","admin"]);
+  if ("error" in auth) return auth.error;
+  const supabase = auth.admin!;
   const { data, error } = await supabase.from("products").upsert(records, { onConflict:"sku" }).select("id,sku");
   if (error) return NextResponse.json({ ok:false,error:error.message }, { status:500 });
   return NextResponse.json({ ok:true, imported:data?.length ?? records.length, total:rows.length });

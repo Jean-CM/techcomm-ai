@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireOrgRole } from "@/lib/require-org-role";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request: Request) {
@@ -7,7 +8,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: "El cliente es requerido." }, { status: 400 });
   }
 
-  const supabase = getSupabaseAdmin();
+  const auth = await requireOrgRole(["owner","admin","manager","agent"]);
+  if ("error" in auth) return auth.error;
+  const supabase = auth.admin!;
   const [customerResult, appointmentsResult, ordersResult, conversationsResult, auditResult] = await Promise.all([
     supabase.from("customers").select("*").eq("id", customerId).single(),
     supabase.from("appointments").select("id,starts_at,status,technician_id,notes,address,created_at,updated_at").eq("customer_id", customerId).order("starts_at", { ascending: false }),
