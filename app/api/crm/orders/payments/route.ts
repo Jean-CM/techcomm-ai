@@ -7,10 +7,25 @@ const ALLOWED_METHODS = new Set(["efectivo", "transferencia", "tarjeta", "otro"]
 const ALLOWED_CONCEPTS = new Set(["diagnostico", "flete", "mano_obra", "pieza", "otro"]);
 
 export async function GET(request: Request) {
+  const supabase = await createClient().catch(() => null);
+  if (!supabase) return NextResponse.json({ ok: false, error: "Supabase no configurado" }, { status: 500 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
   const workOrderId = new URL(request.url).searchParams.get("work_order_id");
   if (!workOrderId) return NextResponse.json({ ok: false, error: "work_order_id es requerido" }, { status: 400 });
 
   const admin = getSupabaseAdmin();
+  const { data: membership } = await admin
+    .from("organization_memberships")
+    .select("status")
+    .eq("user_id", user.id)
+    .eq("organization_id", DEFAULT_ORG_ID)
+    .maybeSingle();
+  if (!membership || membership.status !== "active") {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 403 });
+  }
+
   const { data, error } = await admin
     .from("payments")
     .select("id,amount,method,concept,reference,created_at")
@@ -26,6 +41,17 @@ export async function POST(request: Request) {
   if (!supabase) return NextResponse.json({ ok: false, error: "Supabase no configurado" }, { status: 500 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
+  const admin = getSupabaseAdmin();
+  const { data: membership } = await admin
+    .from("organization_memberships")
+    .select("role,status")
+    .eq("user_id", user.id)
+    .eq("organization_id", DEFAULT_ORG_ID)
+    .maybeSingle();
+  if (!membership || membership.status !== "active" || !["owner", "admin", "manager"].includes(membership.role)) {
+    return NextResponse.json({ ok: false, error: "No tienes permiso para registrar pagos." }, { status: 403 });
+  }
 
   const body = (await request.json().catch(() => ({}))) as {
     work_order_id?: string;
@@ -45,7 +71,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Concepto de pago inválido" }, { status: 400 });
   }
 
-  const admin = getSupabaseAdmin();
   const { error } = await admin.from("payments").insert({
     organization_id: DEFAULT_ORG_ID,
     work_order_id: body.work_order_id,
