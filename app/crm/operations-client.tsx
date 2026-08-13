@@ -27,7 +27,7 @@ type Customer = { id:string; full_name?:string|null; phone:string; email?:string
 type Product = { id:string; sku?:string|null; name:string; piece_name?:string|null; description?:string|null; item_type?:string|null; category?:string|null; brand?:string|null; model?:string|null; unit_cost?:number|null; sale_price?:number|null; price?:number|null; max_discount_pct?:number|null; minimum_authorized_price?:number|null; installation_price?:number|null; delivery_price?:number|null; installation_includes_delivery?:boolean|null; stock:number; reserved_stock:number; active?:boolean };
 type Technician = { id:string; full_name:string; phone?:string|null; specialties?:string[]|null; zones?:string[]|null; status:string; whatsapp_enabled?:boolean };
 type Appointment = { id:string; customer_id?:string|null; technician_id?:string|null; starts_at:string; ends_at?:string|null; address?:string|null; status:string; confirmation_status?:string|null; technician_confirmation_status?:string|null; requires_manual_assignment?:boolean; notes?:string|null; created_at?:string; updated_at?:string };
-type WorkOrder = { id:string; order_number:string; order_type?:string|null; customer_id?:string|null; appointment_id?:string|null; technician_id?:string|null; equipment?:string|null; brand?:string|null; model?:string|null; issue?:string|null; status:string; priority?:string|null; source?:string|null; warranty_type?:string|null; distance_km?:number|null; created_at?:string; updated_at?:string };
+type WorkOrder = { id:string; order_number:string; order_type?:string|null; service_category?:string|null; customer_id?:string|null; appointment_id?:string|null; technician_id?:string|null; equipment?:string|null; brand?:string|null; model?:string|null; issue?:string|null; status:string; priority?:string|null; source?:string|null; warranty_type?:string|null; distance_km?:number|null; created_at?:string; updated_at?:string };
 type Quote = { id:string; quote_number:string; customer_id?:string|null; status:string; total?:number|null; created_at?:string; expires_at?:string|null };
 type Sale = { id:string; customer_id?:string|null; product_id?:string|null; quantity:number; unit_price:number; status:string; source?:string|null; created_at?:string };
 type CallEvent = { id:string; conversation_id:string; customer_phone?:string|null; status?:string|null; summary?:string|null; transcript?:unknown; analysis?:unknown; metadata?:Record<string,unknown>|null; created_at:string };
@@ -110,6 +110,12 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
   const [partQuery,setPartQuery]=useState("");
   const [partResults,setPartResults]=useState<{id:string;name:string;available_stock:number;inventory_status:string}[]>([]);
   const [requiredParts,setRequiredParts]=useState<{id:string;product_id:string;quantity:number;products:{name:string;available_stock:number;inventory_status:string}}[]|null>(null);
+  const [orderPayments,setOrderPayments]=useState<{id:string;amount:number;method:string;concept:string;reference:string|null;created_at:string}[]|null>(null);
+  const [paymentAmount,setPaymentAmount]=useState("");
+  const [paymentMethod,setPaymentMethod]=useState("efectivo");
+  const [paymentConcept,setPaymentConcept]=useState("diagnostico");
+  const [paymentReference,setPaymentReference]=useState("");
+  const [paymentSaving,setPaymentSaving]=useState(false);
   const [dateFilter,setDateFilter]=useState("");
   const [collapsed,setCollapsed]=useState(false);
   const [mobileOpen,setMobileOpen]=useState(false);
@@ -234,7 +240,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
       }else if(modal.kind==="appointment"){
         await post("/api/crm/appointments/update",{id:modal.item.id,starts_at:new Date(String(form.get("starts_at"))).toISOString(),technician_id:form.get("technician_id")||null,status:form.get("status")});
       }else if(modal.kind==="order"){
-        await post("/api/crm/orders/update",{id:modal.item.id,technician_id:form.get("technician_id")||null,status:form.get("status"),priority:form.get("priority"),warranty_type:form.get("warranty_type"),distance_km:form.get("distance_km")?Number(form.get("distance_km")):null});
+        await post("/api/crm/orders/update",{id:modal.item.id,technician_id:form.get("technician_id")||null,status:form.get("status"),priority:form.get("priority"),warranty_type:form.get("warranty_type"),service_category:form.get("service_category"),distance_km:form.get("distance_km")?Number(form.get("distance_km")):null});
       }else if(modal.kind==="manual"){
         const action=String(form.get("action"));
         await post("/api/crm/manual-management",{action,customer_id:form.get("customer_id")||undefined,customer_name:form.get("customer_name"),phone:form.get("phone"),email:form.get("email"),address:form.get("address"),sector:form.get("sector"),technician_id:form.get("technician_id")||null,starts_at:form.get("starts_at")?new Date(String(form.get("starts_at"))).toISOString():undefined,notes:form.get("notes"),equipment:form.get("equipment"),brand:form.get("brand"),model:form.get("model"),issue:form.get("issue"),priority:form.get("priority")});
@@ -350,6 +356,32 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
                 {(role==="super_admin"||role==="admin")&&<Kpi label="Ventas" value={data.sales.length} icon={<ShoppingCart/>} tone="good" sub={<>{money(salesTotal)}</>} />}
                 {(role==="super_admin"||role==="admin")&&<Kpi label="Alertas de inventario" value={outOfStock} icon={<Package/>} tone={outOfStock?"bad":"good"} sub={<>Sin stock disponible</>} />}
               </div>
+
+              {(role==="super_admin"||role==="admin"||role==="supervisor")&&<SectionCard eyebrow="Límites diarios del socio" title="Capacidad de hoy">
+                {(() => {
+                  const todayStr = new Date().toISOString().slice(0,10);
+                  const todaysOrders = data.work_orders.filter(o=>{
+                    const appt = appointmentsById.get(o.appointment_id||"");
+                    return appt?.starts_at?.slice(0,10) === todayStr;
+                  });
+                  const limits: {key:string;label:string;limit:number}[] = [
+                    {key:"instalacion",label:"Instalaciones",limit:47},
+                    {key:"diagnostico",label:"Diagnósticos",limit:36},
+                    {key:"reparacion",label:"Reparaciones",limit:30},
+                  ];
+                  return <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+                    {limits.map(l=>{
+                      const count = todaysOrders.filter(o=>o.service_category===l.key).length;
+                      const over = count >= l.limit;
+                      return <div key={l.key} style={{padding:12,borderRadius:8,border:`1px solid ${over?"var(--bad)":"var(--border)"}`}}>
+                        <div className="muted" style={{fontSize:12}}>{l.label}</div>
+                        <div style={{fontSize:22,fontWeight:700,color:over?"var(--bad)":"var(--text)"}}>{count}<span className="muted" style={{fontSize:14}}> / {l.limit}</span></div>
+                        {over&&<div style={{fontSize:12,color:"var(--bad)"}}>Límite alcanzado</div>}
+                      </div>;
+                    })}
+                  </div>;
+                })()}
+              </SectionCard>}
 
               <div className={styles.dashGrid}>
                 <SectionCard eyebrow="Próximas visitas" title="Agenda compacta" onOpen={ROLE_META[role].menus.includes("Agenda y Órdenes")?()=>goto("Agenda y Órdenes"):undefined}>
@@ -481,7 +513,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
                       <td><div className="tc-truncate">{appt?.address||customer?.address||"Sin dirección"}</div></td>
                       <td>{tech?tech.full_name:<StatusBadge tone="warning">Sin técnico</StatusBadge>}</td>
                       <td><StatusBadge tone={toneFor(item.status)}>{statusLabel(item.status)}</StatusBadge></td>
-                      <td><div className="tc-rowactions">{can("update_order")&&<button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" onClick={()=>{setModal({kind:"order",item});setOrderMaterials(null);setRequiredParts(null);fetch(`/api/crm/orders/${item.id}/materials`).then(r=>r.json()).then(p=>setOrderMaterials(p.materials||[])).catch(()=>setOrderMaterials([]));fetch(`/api/crm/orders/required-parts?work_order_id=${item.id}`).then(r=>r.json()).then(p=>setRequiredParts(p.parts||[])).catch(()=>setRequiredParts([]));}}>Gestionar</button>}{appt&&can("reschedule")&&<button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={()=>setModal({kind:"appointment",item:appt})}>Cita</button>}</div></td>
+                      <td><div className="tc-rowactions">{can("update_order")&&<button type="button" className="tc-btn tc-btn-secondary tc-btn-sm" onClick={()=>{setModal({kind:"order",item});setOrderMaterials(null);setRequiredParts(null);setOrderPayments(null);fetch(`/api/crm/orders/${item.id}/materials`).then(r=>r.json()).then(p=>setOrderMaterials(p.materials||[])).catch(()=>setOrderMaterials([]));fetch(`/api/crm/orders/required-parts?work_order_id=${item.id}`).then(r=>r.json()).then(p=>setRequiredParts(p.parts||[])).catch(()=>setRequiredParts([]));fetch(`/api/crm/orders/payments?work_order_id=${item.id}`).then(r=>r.json()).then(p=>setOrderPayments(p.payments||[])).catch(()=>setOrderPayments([]));}}>Gestionar</button>}{appt&&can("reschedule")&&<button type="button" className="tc-btn tc-btn-ghost tc-btn-sm" onClick={()=>setModal({kind:"appointment",item:appt})}>Cita</button>}</div></td>
                     </tr>
                   );})}</tbody>
                 </table>
@@ -595,6 +627,12 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
               <option value="techcomm">Techcomm (30 días)</option>
               <option value="fuera_garantia">Fuera de garantía</option>
             </select></label>
+            <label>Categoría de servicio (para límites diarios)<select className="tc-select" name="service_category" defaultValue={modal.item.service_category||"diagnostico"}>
+              <option value="diagnostico">Diagnóstico</option>
+              <option value="reparacion">Reparación</option>
+              <option value="instalacion">Instalación</option>
+              <option value="venta">Venta</option>
+            </select></label>
             <label>Distancia (km, ida y vuelta desde Pantoja)<input className="tc-input" type="number" step="0.1" name="distance_km" defaultValue={modal.item.distance_km||""} placeholder="Solo fuera de garantía, fuera del Gran Santo Domingo"/></label>
             <div className="tc-full">
               <label>Piezas requeridas para esta reparación<input className="tc-input" value={partQuery} onChange={e=>setPartQuery(e.target.value)} placeholder="Buscar pieza o repuesto para agregar..."/></label>
@@ -639,6 +677,47 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
                   {m.unit_price!=null&&<span className="muted">RD${(m.unit_price*m.quantity).toLocaleString("es-DO")}</span>}
                 </div>
               )}
+            </div>
+            <div className="tc-full tc-notice">
+              <strong style={{display:"block",marginBottom:6}}>Pagos registrados</strong>
+              {orderPayments===null?<span className="muted">Cargando...</span>:<>
+                {orderPayments.length===0?<span className="muted">Ninguno registrado todavía.</span>:<>
+                  {orderPayments.map(p=>
+                    <div key={p.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
+                      <span>{p.concept.replace("_"," ")} · {p.method}{p.reference?` · ${p.reference}`:""}</span>
+                      <span>RD${p.amount.toLocaleString("es-DO")}</span>
+                    </div>
+                  )}
+                  <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderTop:"1px solid var(--border)",fontWeight:700}}>
+                    <span>Total pagado</span>
+                    <span>RD${orderPayments.reduce((sum,p)=>sum+p.amount,0).toLocaleString("es-DO")}</span>
+                  </div>
+                </>}
+              </>}
+              {can("view_financial")&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10,alignItems:"flex-end"}}>
+                <label style={{flex:"1 1 100px"}}>Monto (RD$)<input className="tc-input" type="number" step="0.01" value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)}/></label>
+                <label>Método<select className="tc-select" value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)}>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="transferencia">Transferencia</option>
+                  <option value="tarjeta">Tarjeta</option>
+                  <option value="otro">Otro</option>
+                </select></label>
+                <label>Concepto<select className="tc-select" value={paymentConcept} onChange={e=>setPaymentConcept(e.target.value)}>
+                  <option value="diagnostico">Diagnóstico</option>
+                  <option value="flete">Flete</option>
+                  <option value="mano_obra">Mano de obra</option>
+                  <option value="pieza">Pieza</option>
+                  <option value="otro">Otro</option>
+                </select></label>
+                <label style={{flex:"1 1 120px"}}>Referencia<input className="tc-input" value={paymentReference} onChange={e=>setPaymentReference(e.target.value)} placeholder="Opcional"/></label>
+                <button type="button" className="tc-btn tc-btn-sm" disabled={paymentSaving||!paymentAmount} onClick={async()=>{
+                  setPaymentSaving(true);
+                  const response=await fetch("/api/crm/orders/payments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({work_order_id:modal.item.id,amount:Number(paymentAmount),method:paymentMethod,concept:paymentConcept,reference:paymentReference||undefined})});
+                  const payload=await response.json();
+                  if(payload.ok){setPaymentAmount("");setPaymentReference("");const refreshed=await fetch(`/api/crm/orders/payments?work_order_id=${modal.item.id}`).then(r=>r.json());setOrderPayments(refreshed.payments||[]);}
+                  setPaymentSaving(false);
+                }}>Registrar pago</button>
+              </div>}
             </div>
           </div>}
           {modal?.kind==="manual"&&<ManualFields customers={data.customers} technicians={data.technicians}/>}

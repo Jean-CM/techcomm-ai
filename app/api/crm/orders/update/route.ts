@@ -7,6 +7,7 @@ type Payload = {
   technician_id?: string | null;
   priority?: string;
   warranty_type?: string;
+  service_category?: string;
   distance_km?: number | null;
   required_part_id?: string | null;
   actor_name?: string;
@@ -34,6 +35,7 @@ const ALLOWED_WARRANTY_TYPES = new Set([
   "techcomm",
   "fuera_garantia",
 ]);
+const ALLOWED_SERVICE_CATEGORIES = new Set(["instalacion", "diagnostico", "reparacion", "venta"]);
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Payload;
@@ -77,6 +79,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Tipo de garantía no permitido." }, { status: 400 });
     }
     values.warranty_type = body.warranty_type;
+  }
+
+  if (body.service_category) {
+    if (!ALLOWED_SERVICE_CATEGORIES.has(body.service_category)) {
+      return NextResponse.json({ ok: false, error: "Categoría de servicio no permitida." }, { status: 400 });
+    }
+    values.service_category = body.service_category;
   }
 
   if (body.distance_km !== undefined) {
