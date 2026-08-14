@@ -54,9 +54,7 @@ function findDashboardInsertionPoint() {
   const headings = [...document.querySelectorAll("h2,h3")];
   const capacity = headings.find((node) => node.textContent?.trim() === "Capacidad de hoy");
   if (!capacity) return null;
-  let card: HTMLElement | null = capacity.parentElement;
-  while (card && card.parentElement && card.getBoundingClientRect().width < window.innerWidth * 0.45) card = card.parentElement;
-  return card;
+  return capacity.closest(".tc-card") as HTMLElement | null;
 }
 
 export default function CrmEnhancements() {
@@ -79,52 +77,46 @@ export default function CrmEnhancements() {
     `;
     document.head.appendChild(style);
 
+    let cleanup: (() => void) | undefined;
     const sync = () => {
+      cleanup?.();
       const select = findProfileSelect();
       if (!select) return;
       ensurePartnerOption(select);
       setRole(select.value);
 
-      const onChange = () => {
+      const onChange = (event: Event) => {
         if (select.value === "partner") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
           window.location.assign("/crm/ejecutiva");
           return;
         }
         setRole(select.value);
       };
-      select.addEventListener("change", onChange);
-      return () => select.removeEventListener("change", onChange);
+      select.addEventListener("change", onChange, true);
+      cleanup = () => select.removeEventListener("change", onChange, true);
     };
 
-    let cleanup = sync();
-    const observer = new MutationObserver(() => {
-      cleanup?.();
-      cleanup = sync();
-      if (!anchor) {
-        const point = findDashboardInsertionPoint();
-        if (point && point.parentElement) {
-          let target = document.querySelector('[data-supervisor-map-anchor]') as HTMLElement | null;
-          if (!target) {
-            target = document.createElement("div");
-            target.dataset.supervisorMapAnchor = "true";
-            point.insertAdjacentElement("afterend", target);
-          }
-          setAnchor(target);
-        }
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    const point = findDashboardInsertionPoint();
-    if (point) {
+    const ensureAnchor = () => {
       let target = document.querySelector('[data-supervisor-map-anchor]') as HTMLElement | null;
       if (!target) {
+        const point = findDashboardInsertionPoint();
+        if (!point) return;
         target = document.createElement("div");
         target.dataset.supervisorMapAnchor = "true";
         point.insertAdjacentElement("afterend", target);
       }
       setAnchor(target);
-    }
+    };
+
+    sync();
+    ensureAnchor();
+    const observer = new MutationObserver(() => {
+      sync();
+      ensureAnchor();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       observer.disconnect();
@@ -132,7 +124,7 @@ export default function CrmEnhancements() {
       style.remove();
       document.documentElement.classList.remove("crm-refined");
     };
-  }, [anchor]);
+  }, []);
 
   useEffect(() => {
     if (role !== "supervisor" && role !== "super_admin" && role !== "admin") return;

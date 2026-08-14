@@ -1,4 +1,5 @@
 import OperationsClient from "./operations-client";
+import CrmEnhancements from "./crm-enhancements";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
@@ -28,5 +29,8 @@ export default async function CrmPage() {
     canOpenAudit = false;
   }
 
-  return <OperationsClient canOpenAudit={canOpenAudit} />;
+  return <>
+    <OperationsClient canOpenAudit={canOpenAudit} />
+    <CrmEnhancements />
+  </>;
 }
