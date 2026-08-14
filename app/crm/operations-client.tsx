@@ -311,6 +311,7 @@ export default function OperationsClient({ canOpenAudit = false }: { canOpenAudi
             <div className={styles.navGroup}>
               <span className={styles.navGroupLabel}>Control</span>
               <Link className={`${styles.navItem} ${styles.navLink}`} href="/admin/auditoria"><ShieldCheck /><span className={styles.navLabel}>Auditoría</span><span className={styles.tip}>Auditoría</span></Link>
+              <Link className={`${styles.navItem} ${styles.navLink}`} href="/crm/ejecutiva"><LayoutDashboard /><span className={styles.navLabel}>Vista Ejecutiva</span><span className={styles.tip}>Vista Ejecutiva</span></Link>
               <Link className={`${styles.navItem} ${styles.navLink}`} href="/crm/health"><Activity /><span className={styles.navLabel}>Salud del sistema</span><span className={styles.tip}>Salud del sistema</span></Link>
               <Link className={`${styles.navItem} ${styles.navLink}`} href="/admin"><Settings /><span className={styles.navLabel}>Administración</span><span className={styles.tip}>Administración</span></Link>
             </div>
