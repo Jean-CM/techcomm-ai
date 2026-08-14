@@ -9,6 +9,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/process-approval-followups",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/audio-retention",
       "schedule": "0 6 * * *"
     }
