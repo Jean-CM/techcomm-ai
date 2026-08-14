@@ -7,6 +7,7 @@ import {
   Package, FileText, ShieldCheck, Activity, Settings, Menu, PanelLeftClose,
   PanelLeft, RefreshCw, Plus, LogOut, Search, Phone, MessageCircle,
   AlertTriangle, CheckCircle2, Volume2, MapPin, ClipboardList, ArrowRight,
+  Smartphone,
   type LucideIcon,
 } from "lucide-react";
 import styles from "./operations-client.module.css";
@@ -67,6 +68,7 @@ const NAV_GROUPS: { label:string; items:{ key:string; Icon:LucideIcon }[] }[] = 
     { key:"Conversaciones", Icon:MessagesSquare },
     { key:"Clientes", Icon:Users },
     { key:"Agenda y Órdenes", Icon:CalendarClock },
+    { key:"Taller", Icon:Smartphone },
     { key:"Técnicos", Icon:Wrench },
   ] },
   { label:"Comercial", items:[
