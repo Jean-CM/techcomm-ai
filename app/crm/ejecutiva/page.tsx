@@ -13,6 +13,7 @@ function delta(current: number, previous: number) {
   return (current - previous) / previous;
 }
 function dateKey(value: string) { return new Date(value).toISOString().slice(0, 10); }
+function clamp(value:number){ return Math.max(0,Math.min(1,value)); }
 
 export default async function ExecutivePage() {
   const supabase = await createClient();
@@ -79,10 +80,15 @@ export default async function ExecutivePage() {
   const acceptedValue = currentQuotes.filter(x => ["accepted", "approved"].includes(String(x.status))).reduce((s, x) => s + Number(x.total || 0), 0);
   const collected = currentPayments.reduce((s, x) => s + Number(x.amount || 0), 0);
   const prevCollected = previousPayments.reduce((s, x) => s + Number(x.amount || 0), 0);
+  const collectionRate = acceptedValue ? clamp(collected / acceptedValue) : 0;
   const activeOrders = currentOrders.filter(x => !["completed", "cancelled", "devuelto_cliente"].includes(String(x.status))).length;
   const completedOrders = currentOrders.filter(x => x.status === "completed").length;
-  const pendingFollowups = followups.filter(x => x.status === "pending" && new Date(x.scheduled_for) >= new Date(now.getTime() - 24 * 3600 * 1000)).length;
+  const pendingFollowups = followups.filter(x => x.status === "pending").length;
+  const overdueFollowups = followups.filter(x => x.status === "pending" && new Date(x.scheduled_for) < now).length;
   const criticalStock = products.filter(x => x.inventory_status === "out" || Number(x.available_stock ?? 0) <= Number(x.min_stock ?? 0)).length;
+  const supervisorCases = currentApprovalRows.filter(x => x.supervisor_required).length;
+  const businessPulse = overdueFollowups > 0 || criticalStock > 0 || supervisorCases > 0 ? "Requiere atención" : "Operación estable";
+  const businessPulseTone = overdueFollowups > 2 || criticalStock > 3 ? "alert" : overdueFollowups || criticalStock || supervisorCases ? "watch" : "good";
 
   const days: { key: string; label: string; total: number }[] = [];
   for (let i = 0; i < 14; i++) {
@@ -101,27 +107,42 @@ export default async function ExecutivePage() {
   const lineRows = [...lines.entries()].sort((a,b) => b[1]-a[1]);
   const maxLine = Math.max(1, ...lineRows.map(([,v]) => v));
 
+  const brands = new Map<string, number>();
+  currentOrders.forEach(o => { if(o.brand) brands.set(o.brand,(brands.get(o.brand)||0)+1); });
+  const topBrands = [...brands.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxBrand = Math.max(1,...topBrands.map(([,v])=>v));
+
   const kpis = [
     { label: "Ingresos cobrados", value: money(collected), change: delta(collected, prevCollected), note: "Pagos registrados · últimos 30 días" },
     { label: "Monto cotizado", value: money(quoted), change: delta(quoted, prevQuoted), note: `${currentQuotes.length} cotizaciones emitidas` },
     { label: "Valor aprobado", value: money(acceptedValue), change: quoted ? acceptedValue / quoted : 0, note: "Participación del monto cotizado" },
+    { label: "Cobranza sobre aprobado", value: pct(collectionRate), change: collectionRate, note: "Cobrado vs. valor aprobado" },
     { label: "Aprobación de presupuestos", value: pct(approvalRate), change: approvalRate, note: `${approved} aprobados · ${rejected} rechazados` },
-    { label: "Órdenes nuevas", value: String(currentOrders.length), change: delta(currentOrders.length, previousOrders.length), note: `${activeOrders} activas · ${completedOrders} completadas` },
     { label: "Llamadas IA", value: String(currentCalls.length), change: delta(currentCalls.length, previousCalls.length), note: "Conversaciones procesadas" },
   ];
 
   return <main className={styles.page}>
     <header className={styles.header}>
       <div>
-        <div className={styles.eyebrow}>TECHCOMM OPERATIONS · VISTA EJECUTIVA</div>
+        <div className={styles.eyebrow}>TECHCOMM OPERATIONS · VISTA SOCIOS</div>
         <h1>El negocio, sin ruido.</h1>
-        <p>Resumen de los últimos 30 días para dirección, socios y toma de decisiones.</p>
+        <p>Un tablero ejecutivo para saber qué está creciendo, qué se está cobrando y dónde intervenir.</p>
       </div>
       <div className={styles.actions}>
         <span className={styles.period}>Últimos 30 días</span>
         <Link className={styles.back} href="/crm">Volver al CRM</Link>
       </div>
     </header>
+
+    <section className={styles.pulseRow}>
+      <article className={`${styles.pulse} ${styles[businessPulseTone]}`}>
+        <div><span>Pulso del negocio</span><strong>{businessPulse}</strong></div>
+        <p>{overdueFollowups} seguimientos vencidos · {criticalStock} SKU críticos · {supervisorCases} casos con supervisor</p>
+      </article>
+      <article className={styles.pulseMetric}><span>Órdenes del período</span><strong>{currentOrders.length}</strong><small>{activeOrders} activas · {completedOrders} completadas</small></article>
+      <article className={styles.pulseMetric}><span>Pendientes de contacto</span><strong>{pendingFollowups}</strong><small>{overdueFollowups} ya vencidos</small></article>
+      <article className={styles.pulseMetric}><span>Valor aprobado</span><strong>{money(acceptedValue)}</strong><small>{pct(collectionRate)} ya cobrado</small></article>
+    </section>
 
     <section className={styles.kpiGrid}>
       {kpis.map((kpi) => <article className={styles.kpi} key={kpi.label}>
@@ -159,9 +180,9 @@ export default async function ExecutivePage() {
       </article>
     </section>
 
-    <section className={styles.gridTwo}>
+    <section className={styles.gridThree}>
       <article className={styles.panel}>
-        <div className={styles.panelHead}><div><span>Mix operativo</span><h2>Órdenes por línea de servicio</h2></div></div>
+        <div className={styles.panelHead}><div><span>Mix operativo</span><h2>Órdenes por línea</h2></div></div>
         <div className={styles.hBars}>
           {lineRows.length ? lineRows.map(([name, value]) => <div className={styles.hRow} key={name}>
             <div><span>{name.replaceAll("_", " ")}</span><b>{value}</b></div>
@@ -171,12 +192,22 @@ export default async function ExecutivePage() {
       </article>
 
       <article className={styles.panel}>
+        <div className={styles.panelHead}><div><span>Demanda</span><h2>Top marcas atendidas</h2></div></div>
+        <div className={styles.hBars}>
+          {topBrands.length ? topBrands.map(([name,value])=><div className={styles.hRow} key={name}>
+            <div><span>{name}</span><b>{value}</b></div>
+            <div className={styles.hTrack}><div style={{ width: `${(value/maxBrand)*100}%` }}/></div>
+          </div>) : <p className={styles.empty}>Sin datos de marcas en el período.</p>}
+        </div>
+      </article>
+
+      <article className={styles.panel}>
         <div className={styles.panelHead}><div><span>Radar ejecutivo</span><h2>Lo que necesita atención</h2></div></div>
         <div className={styles.radar}>
-          <div><span>Seguimientos pendientes</span><strong>{pendingFollowups}</strong><small>Clientes que esperan nuevo contacto</small></div>
+          <div><span>Seguimientos pendientes</span><strong>{pendingFollowups}</strong><small>{overdueFollowups} ya superaron la fecha acordada</small></div>
           <div><span>Inventario crítico</span><strong>{criticalStock}</strong><small>SKU agotados o en/bajo mínimo</small></div>
           <div><span>Órdenes activas</span><strong>{activeOrders}</strong><small>Casos todavía en proceso</small></div>
-          <div><span>Supervisor requerido</span><strong>{currentApprovalRows.filter(x => x.supervisor_required).length}</strong><small>Excepciones, descuentos o escalamiento</small></div>
+          <div><span>Supervisor requerido</span><strong>{supervisorCases}</strong><small>Descuentos, excepciones o escalamiento</small></div>
         </div>
       </article>
     </section>
