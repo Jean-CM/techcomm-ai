@@ -392,7 +392,7 @@ export async function POST(request: Request) {
 
     if (appointmentId) {
       const mapped = looksUnreachable
-        ? { confirmation_status: "unreachable" }
+        ? { confirmation_status: "no_answer" }
         : appointmentStatus === "confirmada"
           ? { status: "confirmed", confirmation_status: "confirmed" }
           : appointmentStatus === "cancelada"
