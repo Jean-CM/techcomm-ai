@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const ROLES = ["owner", "admin", "manager", "analyst", "agent", "viewer"];
+const ROLES = ["owner", "admin", "manager", "analyst", "agent", "viewer", "technician"];
 const STATUSES = ["active", "suspended", "invited"];
 
 type Member = { user_id: string; email: string; role: string; status: string };
@@ -31,8 +31,9 @@ export default function UsersTable({ initialMembers }: { initialMembers: Member[
     }
   }
 
-  async function removeMember(userId: string, email: string) {
-    if (!confirm(`¿Quitar el acceso de ${email}? Podrás volver a crearlo después si te equivocas.`)) return;
+  async function deleteUser(userId: string, email: string) {
+    const confirmed = confirm(`¿Eliminar definitivamente a ${email}?\n\nSe eliminará su acceso, cuenta de autenticación y perfil técnico vinculado. Esta acción no se puede deshacer.`);
+    if (!confirmed) return;
     setSavingId(userId);
     setError(null);
     try {
@@ -42,10 +43,10 @@ export default function UsersTable({ initialMembers }: { initialMembers: Member[
         body: JSON.stringify({ user_id: userId }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "No se pudo quitar el acceso");
+      if (!response.ok) throw new Error(payload.error || "No se pudo eliminar el usuario");
       setMembers((prev) => prev.filter((m) => m.user_id !== userId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al quitar acceso");
+      setError(err instanceof Error ? err.message : "Error al eliminar usuario");
     } finally {
       setSavingId(null);
     }
@@ -55,48 +56,14 @@ export default function UsersTable({ initialMembers }: { initialMembers: Member[
     <div>
       {error && <p style={{ color: "crimson" }}>{error}</p>}
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 20 }}>
-        <thead>
-          <tr style={{ textAlign: "left" }}>
-            <th>Correo</th>
-            <th>Rol</th>
-            <th>Estado</th>
-            <th></th>
-          </tr>
-        </thead>
+        <thead><tr style={{ textAlign: "left" }}><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
         <tbody>
           {members.map((m) => (
             <tr key={m.user_id}>
               <td>{m.email}</td>
-              <td>
-                <select
-                  className="input"
-                  value={m.role}
-                  disabled={savingId === m.user_id}
-                  onChange={(e) => updateMember(m.user_id, { role: e.target.value })}
-                >
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </td>
-              <td>
-                <select
-                  className="input"
-                  value={m.status}
-                  disabled={savingId === m.user_id}
-                  onChange={(e) => updateMember(m.user_id, { status: e.target.value })}
-                >
-                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </td>
-              <td>
-                <button
-                  className="button"
-                  style={{ background: "transparent", border: "1px solid crimson", color: "crimson" }}
-                  disabled={savingId === m.user_id}
-                  onClick={() => removeMember(m.user_id, m.email)}
-                >
-                  Quitar acceso
-                </button>
-              </td>
+              <td><select className="input" value={m.role} disabled={savingId === m.user_id} onChange={(e) => updateMember(m.user_id, { role: e.target.value })}>{ROLES.map((r) => <option key={r} value={r}>{r}</option>)}</select></td>
+              <td><select className="input" value={m.status} disabled={savingId === m.user_id} onChange={(e) => updateMember(m.user_id, { status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></td>
+              <td><button className="button" style={{ background: "transparent", border: "1px solid crimson", color: "crimson" }} disabled={savingId === m.user_id} onClick={() => deleteUser(m.user_id, m.email)}>{savingId === m.user_id ? "Procesando..." : "Eliminar usuario"}</button></td>
             </tr>
           ))}
         </tbody>
