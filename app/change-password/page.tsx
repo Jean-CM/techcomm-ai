@@ -8,16 +8,16 @@ export default async function ChangePasswordPage({ searchParams }: { searchParam
       <section className="card" style={{ width: "min(440px, 100%)" }}>
         <span className="badge">Techcomm AI</span>
         <h1 style={{ marginBottom: 8 }}>Crea tu contraseña</h1>
-        <p className="muted">Por seguridad, debes reemplazar la contraseña temporal antes de continuar.</p>
+        <p className="muted">Usa una contraseña corta de 6 a 7 caracteres.</p>
         {error ? <p style={{ color: "#ff9b9b" }}>{error}</p> : null}
         <form action={updatePassword} className="grid" style={{ marginTop: 24 }}>
           <label>
             <span className="muted">Nueva contraseña</span>
-            <input className="input" type="password" name="password" autoComplete="new-password" minLength={8} required />
+            <input className="input" type="password" name="password" autoComplete="new-password" minLength={6} maxLength={7} required />
           </label>
           <label>
             <span className="muted">Confirma la contraseña</span>
-            <input className="input" type="password" name="confirm" autoComplete="new-password" minLength={8} required />
+            <input className="input" type="password" name="confirm" autoComplete="new-password" minLength={6} maxLength={7} required />
           </label>
           <button className="button" type="submit">Guardar y continuar</button>
         </form>
