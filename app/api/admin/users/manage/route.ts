@@ -35,6 +35,32 @@ export async function PATCH(request: Request) {
     if ((count ?? 0) <= 1) return NextResponse.json({ ok: false, error: "No puedes quitarte el rol de owner si eres el único owner activo." }, { status: 400 });
   }
 
+  const { data: currentMembership } = await admin!.from("organization_memberships").select("role").eq("user_id", body.user_id).eq("organization_id", DEFAULT_ORG_ID).maybeSingle();
+
+  if (body.role === "technician" && currentMembership?.role !== "technician") {
+    const { data: authUser, error: authUserError } = await admin!.auth.admin.getUserById(body.user_id);
+    if (authUserError || !authUser.user) return NextResponse.json({ ok: false, error: "No se pudo leer la cuenta de autenticación." }, { status: 500 });
+
+    const { data: existingTech } = await admin!.from("technicians").select("id").eq("user_id", body.user_id).maybeSingle();
+    if (!existingTech) {
+      const fullName = String(authUser.user.user_metadata?.full_name || authUser.user.email || "Técnico");
+      const phone = authUser.user.user_metadata?.phone ? String(authUser.user.user_metadata.phone) : null;
+      const { error: technicianError } = await admin!.from("technicians").insert({ organization_id: DEFAULT_ORG_ID, user_id: body.user_id, full_name: fullName, phone, active: true, status: "available" });
+      if (technicianError) return NextResponse.json({ ok: false, error: `No se pudo crear el perfil técnico: ${technicianError.message}` }, { status: 500 });
+    }
+
+    const { error: metadataError } = await admin!.auth.admin.updateUserById(body.user_id, { user_metadata: { ...authUser.user.user_metadata, app_role: "technician" } });
+    if (metadataError) return NextResponse.json({ ok: false, error: `No se pudo activar el portal técnico: ${metadataError.message}` }, { status: 500 });
+  }
+
+  if (body.role && body.role !== "technician" && currentMembership?.role === "technician") {
+    const { data: authUser } = await admin!.auth.admin.getUserById(body.user_id);
+    const nextMetadata = { ...(authUser.user?.user_metadata ?? {}) } as Record<string, unknown>;
+    delete nextMetadata.app_role;
+    await admin!.auth.admin.updateUserById(body.user_id, { user_metadata: nextMetadata });
+    await admin!.from("technicians").delete().eq("user_id", body.user_id);
+  }
+
   const updates: Record<string, string> = {};
   if (body.role) updates.role = body.role;
   if (body.status) updates.status = body.status;
@@ -58,7 +84,6 @@ export async function DELETE(request: Request) {
     if ((count ?? 0) <= 1) return NextResponse.json({ ok: false, error: "No puedes eliminar al único owner activo." }, { status: 400 });
   }
 
-  // El perfil técnico se elimina primero para que desaparezca también de la operación.
   const { error: technicianError } = await admin!.from("technicians").delete().eq("user_id", body.user_id);
   if (technicianError) return NextResponse.json({ ok: false, error: `No se pudo eliminar el perfil técnico: ${technicianError.message}` }, { status: 500 });
 
