@@ -1,6 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+function clearSupabaseCookies(request: NextRequest) {
+  const redirect = NextResponse.redirect(new URL("/login?session=expired", request.url));
+  for (const cookie of request.cookies.getAll()) {
+    if (cookie.name.startsWith("sb-") || cookie.name.includes("auth-token")) {
+      redirect.cookies.set(cookie.name, "", { path: "/", maxAge: 0 });
+    }
+  }
+  return redirect;
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -19,7 +29,7 @@ export async function middleware(request: NextRequest) {
     }
   });
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
   const isCrmArea = request.nextUrl.pathname.startsWith("/dashboard")
     || request.nextUrl.pathname.startsWith("/crm")
     || request.nextUrl.pathname.startsWith("/admin");
@@ -28,12 +38,16 @@ export async function middleware(request: NextRequest) {
   const isLogin = request.nextUrl.pathname.startsWith("/login");
   const isCrmApi = request.nextUrl.pathname.startsWith("/api/crm");
   const isChangePassword = request.nextUrl.pathname.startsWith("/change-password");
+
+  if (authError) {
+    if (isProtected || isChangePassword || isLogin) return clearSupabaseCookies(request);
+    if (isCrmApi) return NextResponse.json({ ok: false, error: "Session expired" }, { status: 401 });
+  }
+
   const mustChangePassword = Boolean(user?.user_metadata?.must_change_password);
   const isTechnicianAccount = user?.user_metadata?.app_role === "technician";
 
-  if (isCrmApi && !user) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
+  if (isCrmApi && !user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   if (isProtected && !user) return NextResponse.redirect(new URL("/login", request.url));
   if (isProtected && mustChangePassword) return NextResponse.redirect(new URL("/change-password", request.url));
   if (isCrmArea && isTechnicianAccount) return NextResponse.redirect(new URL("/tecnico", request.url));
