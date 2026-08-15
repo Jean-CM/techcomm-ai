@@ -54,20 +54,31 @@ export default function UsersTable({ initialMembers }: { initialMembers: Member[
 
   return (
     <div>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 20 }}>
-        <thead><tr style={{ textAlign: "left" }}><th>Correo</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
-        <tbody>
-          {members.map((m) => (
-            <tr key={m.user_id}>
-              <td>{m.email}</td>
-              <td><select className="input" value={m.role} disabled={savingId === m.user_id} onChange={(e) => updateMember(m.user_id, { role: e.target.value })}>{ROLES.map((r) => <option key={r} value={r}>{r}</option>)}</select></td>
-              <td><select className="input" value={m.status} disabled={savingId === m.user_id} onChange={(e) => updateMember(m.user_id, { status: e.target.value })}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></td>
-              <td><button className="button" style={{ background: "transparent", border: "1px solid crimson", color: "crimson" }} disabled={savingId === m.user_id} onClick={() => deleteUser(m.user_id, m.email)}>{savingId === m.user_id ? "Procesando..." : "Eliminar usuario"}</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {error && <div style={{ marginBottom: 12, padding: 10, border: "1px solid #7a2734", borderRadius: 10, color: "#ff9aa8", background: "#2a1419" }}>{error}</div>}
+      <div style={{ display: "grid", gap: 10, marginBottom: 20 }}>
+        {members.map((m) => (
+          <article key={m.user_id} style={{ border: "1px solid #303640", borderRadius: 12, padding: 14, background: "rgba(255,255,255,.015)" }}>
+            <div style={{ fontWeight: 700, overflowWrap: "anywhere", marginBottom: 12 }}>{m.email}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, alignItems: "end" }}>
+              <label>
+                <span className="muted" style={{ display: "block", fontSize: 12, marginBottom: 5 }}>Rol</span>
+                <select className="input" style={{ width: "100%" }} value={m.role} disabled={savingId === m.user_id} onChange={(e) => updateMember(m.user_id, { role: e.target.value })}>
+                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </label>
+              <label>
+                <span className="muted" style={{ display: "block", fontSize: 12, marginBottom: 5 }}>Estado</span>
+                <select className="input" style={{ width: "100%" }} value={m.status} disabled={savingId === m.user_id} onChange={(e) => updateMember(m.user_id, { status: e.target.value })}>
+                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+              <button className="button" style={{ width: "100%", background: "transparent", border: "1px solid #e43d55", color: "#ff5c73" }} disabled={savingId === m.user_id} onClick={() => deleteUser(m.user_id, m.email)}>
+                {savingId === m.user_id ? "Procesando..." : "Eliminar usuario"}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
