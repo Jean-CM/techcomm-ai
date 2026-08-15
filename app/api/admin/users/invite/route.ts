@@ -6,12 +6,21 @@ const DEFAULT_ORG_ID = "e349e921-568f-44b3-a52f-d2850f480264";
 const ALLOWED_ROLES = ["owner", "admin", "manager", "analyst", "agent", "viewer", "technician"];
 
 function generateTempPassword() {
-  // Supabase Auth exige un mínimo operativo de 6 caracteres en este proyecto.
-  // Generamos 7 para mantenerlo dentro del rango corto solicitado sin romper el login.
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let out = "";
   for (let i = 0; i < 7; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
+}
+
+async function findAuthUserByEmail(admin: ReturnType<typeof getSupabaseAdmin>, email: string) {
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
+    if (error) throw error;
+    const found = data.users.find((candidate) => candidate.email?.toLowerCase() === email);
+    if (found) return found;
+    if (data.users.length < 100) break;
+  }
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -32,6 +41,25 @@ export async function POST(request: Request) {
   if (!email || !role || !ALLOWED_ROLES.includes(role)) return NextResponse.json({ ok: false, error: "email y role válidos son requeridos" }, { status: 400 });
   if (role === "technician" && !body.phone?.trim()) return NextResponse.json({ ok: false, error: "El teléfono es requerido para crear un perfil de técnico." }, { status: 400 });
 
+  // Recover safely from orphan Auth users: an account may remain in auth.users even
+  // after its organization membership was removed by older versions of the admin UI.
+  const existingAuthUser = await findAuthUserByEmail(admin, email).catch(() => null);
+  if (existingAuthUser) {
+    const [{ count: membershipCount }, { count: technicianCount }] = await Promise.all([
+      admin.from("organization_memberships").select("*", { count: "exact", head: true }).eq("user_id", existingAuthUser.id),
+      admin.from("technicians").select("*", { count: "exact", head: true }).eq("user_id", existingAuthUser.id),
+    ]);
+
+    if ((membershipCount ?? 0) > 0 || (technicianCount ?? 0) > 0) {
+      return NextResponse.json({ ok: false, error: "Este correo ya pertenece a un usuario activo o vinculado. Elimínalo desde Administración antes de volver a crearlo." }, { status: 409 });
+    }
+
+    const { error: orphanDeleteError } = await admin.auth.admin.deleteUser(existingAuthUser.id);
+    if (orphanDeleteError) {
+      return NextResponse.json({ ok: false, error: `El correo quedó huérfano en autenticación y no pudo limpiarse automáticamente: ${orphanDeleteError.message}` }, { status: 500 });
+    }
+  }
+
   const tempPassword = generateTempPassword();
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
@@ -39,6 +67,7 @@ export async function POST(request: Request) {
     email_confirm: true,
     user_metadata: {
       ...(body.full_name ? { full_name: body.full_name } : {}),
+      ...(body.phone ? { phone: body.phone.trim() } : {}),
       must_change_password: true,
       ...(role === "technician" ? { app_role: "technician" } : {}),
     }
