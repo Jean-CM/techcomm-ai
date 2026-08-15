@@ -26,16 +26,13 @@ export async function updatePassword(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
 
-  if (password.length < 8) redirect("/change-password?error=La%20contraseña%20debe%20tener%20al%20menos%208%20caracteres");
+  if (password.length < 6 || password.length > 7) redirect("/change-password?error=La%20contraseña%20debe%20tener%20entre%206%20y%207%20caracteres");
   if (password !== confirm) redirect("/change-password?error=Las%20contraseñas%20no%20coinciden");
 
   const supabase = await createClient().catch(() => null);
   if (!supabase) redirect(`/change-password?error=${encodeURIComponent(CONFIG_ERROR)}`);
 
-  const { error } = await supabase.auth.updateUser({
-    password,
-    data: { must_change_password: false }
-  });
+  const { error } = await supabase.auth.updateUser({ password, data: { must_change_password: false } });
   if (error) redirect(`/change-password?error=${encodeURIComponent(error.message)}`);
 
   redirect("/dashboard");
@@ -50,8 +47,6 @@ export async function requestPasswordReset(formData: FormData) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${appUrl}/auth/callback` });
-  // Always show the same confirmation, whether or not the email exists —
-  // this avoids leaking which addresses have accounts.
   redirect("/forgot-password?sent=1");
 }
 
