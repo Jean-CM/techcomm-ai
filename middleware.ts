@@ -11,6 +11,16 @@ function clearSupabaseCookies(request: NextRequest) {
   return redirect;
 }
 
+function clearSupabaseCookiesWithoutRedirect(request: NextRequest) {
+  const response = NextResponse.next({ request });
+  for (const cookie of request.cookies.getAll()) {
+    if (cookie.name.startsWith("sb-") || cookie.name.includes("auth-token")) {
+      response.cookies.set(cookie.name, "", { path: "/", maxAge: 0 });
+    }
+  }
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -40,8 +50,13 @@ export async function middleware(request: NextRequest) {
   const isChangePassword = request.nextUrl.pathname.startsWith("/change-password");
 
   if (authError) {
-    if (isProtected || isChangePassword || isLogin) return clearSupabaseCookies(request);
     if (isCrmApi) return NextResponse.json({ ok: false, error: "Session expired" }, { status: 401 });
+
+    // Critical: never redirect /login back to /login when the session is stale.
+    // Clear invalid Supabase cookies in-place so the login page can render normally.
+    if (isLogin) return clearSupabaseCookiesWithoutRedirect(request);
+
+    if (isProtected || isChangePassword) return clearSupabaseCookies(request);
   }
 
   const mustChangePassword = Boolean(user?.user_metadata?.must_change_password);
