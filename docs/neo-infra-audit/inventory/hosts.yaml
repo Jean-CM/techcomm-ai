@@ -1,0 +1,58 @@
+# JMAR / NEO — HOST INVENTORY
+# Source of truth. Values derived from discovery evidence only; never invented.
+# audited: 2026-08-22  mode: read-only  session: no homelab connectivity
+meta:
+  last_audited: "2026-08-22"
+  method: "static analysis of neo-core-ai IaC + committed ops/ probe output"
+  caveat: "No host was contacted directly. Live state is UNVERIFIED."
+
+hosts:
+  - id: dockerhost
+    name: dockerhost
+    status: ACTIVE
+    confidence: HIGH
+    evidence: "neo-core-ai/ops/proxmox-probe.txt, ops/runner-heartbeat.json (2026-08-19)"
+    platform: bare-metal-or-vm   # UNKNOWN which; no hypervisor confirmed
+    os: linux
+    role: primary Docker host; GitHub Actions self-hosted runner
+    criticality: CRITICAL
+    network:
+      lan_ip: 10.0.0.59
+      lan_subnet: 10.0.0.0/24
+      gateway: 10.0.0.1
+      interface: enp6s18
+      addressing: dhcp
+      tailscale_ip: 100.76.5.124
+      tailscale_dns: dockerhost.tailda8389.ts.net
+      tailscale_version: 1.102.2
+      tailscale_state: Running
+      tailscale_funnel: DISABLED
+      docker_bridges: [172.17.0.1, 172.18.0.1, 172.19.0.1, 172.20.0.1, 172.21.0.1, 172.22.0.1]
+      ipv6: present
+    runner:
+      type: github-actions-self-hosted
+      label: jmar-docker
+      user: jmaradmin
+      last_heartbeat: "2026-08-19T18:21:13Z"
+      heartbeat_status: STALE
+    backup: NONE
+    monitoring: node-exporter:19100, cadvisor:18082, neo-warden:8787
+
+  - id: proxmox-unconfirmed
+    name: jmarlab
+    status: UNKNOWN
+    confidence: LOW
+    evidence: "probe of 192.168.1.10 -> web=000, ssh=closed, ssh_root/jmaradmin unavailable"
+    note: >
+      Historically assumed Proxmox node. NOT FOUND during discovery. LAN is 10.0.0.0/24,
+      not 192.168.1.0/24. Classified UNKNOWN_COMPONENT.
+      DO NOT DELETE OR ACT ON THIS ENTRY until manually verified.
+    action_required: "Confirm existence, subnet and current role."
+
+network:
+  lan: 10.0.0.0/24
+  gateway: 10.0.0.1
+  isp_links: 2            # per operator statement; UNVERIFIED
+  router_model: "Huawei HG8145X6-13"   # per operator statement; UNVERIFIED
+  port_forwarding_to_internet: NO_EVIDENCE_FOUND
+  remote_access: tailscale-mesh

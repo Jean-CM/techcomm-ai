@@ -1,0 +1,171 @@
+# JMAR / NEO — SERVICE INVENTORY
+# Declared in neo-core-ai/infra/compose/*.yml. Runtime state UNVERIFIED (no connectivity).
+meta:
+  last_audited: "2026-08-22"
+  runtime_state: "UNVERIFIED - all liveness probes blocked by egress policy"
+  containers_declared: 21
+  compose_projects: 3
+
+services:
+  - id: neo-warden
+    name: NEO-WARDEN
+    stack: platform
+    image: python:3.12-alpine
+    status: ACTIVE
+    criticality: HIGH
+    role: read-only health aggregator + Prometheus exporter
+    network: { bind: host, port: 8787, scope: LAN }
+    endpoints: [/health, /status, /report, /metrics]
+    policy: { mode: observe-first, automatic_destructive_actions: false, automatic_restarts: false }
+    docker_access: "via socket-proxy POST=0 (read-only)"
+    healthcheck: none
+    backup: not-applicable
+    assessment: GOOD_DESIGN
+
+  - id: neo-executor
+    name: NEO-EXECUTOR
+    stack: executor
+    status: SECURITY_RISK
+    criticality: HIGH
+    role: executes docker start/stop/restart/logs from GitHub issues labelled neo-exec
+    network: { bind: 0.0.0.0, port: 8788, scope: LAN }
+    docker_access: "via socket-proxy POST=1 (WRITE ENABLED)"
+    secrets_held: [NEO_GITHUB_TOKEN]
+    finding: "No issue-author verification before executing task JSON"
+    allowlist: [neo-, grafana, prometheus, n8n, homepage, homeassistant, uptime-kuma, speedtest-tracker]
+    healthcheck: none
+
+  - id: grafana
+    name: Grafana
+    stack: platform
+    image: grafana/grafana:latest
+    status: SECURITY_RISK
+    criticality: HIGH
+    network: { bind: 0.0.0.0, port: 3000, scope: LAN }
+    finding: "GF_SECURITY_ADMIN_PASSWORD unset -> default password for user jmaradmin"
+    rotation_required: true
+    healthcheck: none
+    backup: none   # grafana_data volume unprotected
+
+  - id: n8n
+    name: n8n
+    stack: platform
+    image: docker.n8n.io/n8nio/n8n:latest
+    status: ACTIVE
+    criticality: CRITICAL
+    network: { bind: 0.0.0.0, port: 5678, scope: LAN, public_domain: n8n.jmar.do }
+    database: neo-postgres
+    secrets_held: [N8N_ENCRYPTION_KEY]
+    warning: "N8N_ENCRYPTION_KEY loss = permanent loss of all stored credentials. No backup exists."
+    healthcheck: none
+
+  - id: neo-postgres
+    stack: platform
+    image: postgres:16-alpine
+    status: ACTIVE
+    criticality: CRITICAL
+    role: n8n backing store
+    network: { bind: internal-only, scope: compose-network }
+    healthcheck: pg_isready
+    backup: NONE
+
+  - id: neo-studio-db
+    stack: studio
+    image: postgres:16-alpine
+    status: ACTIVE
+    criticality: CRITICAL
+    migrations: [neo_studio.sql, 002_studio_viral_integration.sql, 003_studio_analyst.sql]
+    healthcheck: pg_isready
+    backup: NONE
+
+  - id: neo-studio-api
+    stack: studio
+    network: { bind: 127.0.0.1, port: 8811 }
+    status: ACTIVE
+    criticality: HIGH
+    last_known_ok: "2026-08-19T18:21:13Z"
+    assessment: GOOD_BINDING
+
+  - id: neo-studio-gateway
+    stack: studio
+    network: { bind: 127.0.0.1, port: 8831 }
+    status: DEGRADED
+    criticality: HIGH
+    finding: "Intended public via Tailscale Funnel, but Funnel is DISABLED and studio.jmar.do is NXDOMAIN"
+
+  - id: neo-studio-analyst
+    stack: studio
+    network: { bind: 127.0.0.1, port: 8821 }
+    status: ACTIVE
+    last_known_ok: "2026-08-19T18:21:13Z"
+
+  - id: neo-minio
+    stack: studio
+    image: minio/minio:latest
+    status: DEGRADED
+    criticality: HIGH
+    network: { bind: 127.0.0.1, ports: [9000, 9001] }
+    finding: "MINIO_BROWSER_REDIRECT_URL points at media.jmar.do which is NXDOMAIN"
+    backup: NONE
+
+  - id: neo-viral
+    stack: platform
+    status: ACTIVE
+    criticality: MEDIUM
+    network: { bind: 0.0.0.0, port: 8790, public_domain: viral.jmar.do }
+    secrets_held: [FAL_KEY, GEMINI_API_KEY, OPENAI_API_KEY, YOUTUBE_*, TIKTOK_*, INSTAGRAM_*, FACEBOOK_*, TELEGRAM_BOT_TOKEN, TOKEN_ENCRYPTION_KEY, OAUTH_STATE_SECRET]
+    finding: "NEO_TELEGRAM_WEBHOOK_SECRET has weak committed default 'neo-ultron'"
+    autopilot: { enabled_default: true, auto_publish_default: true }
+
+  - id: homepage
+    stack: platform
+    image: ghcr.io/gethomepage/homepage:latest
+    status: ACTIVE
+    criticality: LOW
+    network: { bind: 0.0.0.0, port: 3005, public_domain: neo.jmar.do }
+    docker_access: "RAW /var/run/docker.sock:ro  <-- SECURITY_EXCEPTION"
+
+  - id: homeassistant
+    stack: platform
+    image: ghcr.io/home-assistant/home-assistant:stable
+    status: ACTIVE
+    criticality: MEDIUM
+    network: { bind: host, port: 8123 }
+    privileged: true
+
+  - id: prometheus
+    stack: platform
+    image: prom/prometheus:latest
+    status: ACTIVE
+    criticality: MEDIUM
+    network: { bind: 0.0.0.0, port: 9090 }
+    retention: 90d
+    scrapes: [prometheus, node-exporter:19100, cadvisor:18082, neo-warden:8787]
+    backup: NONE
+
+  - id: neo-redis
+    stack: platform
+    image: redis:7-alpine
+    status: ACTIVE
+    criticality: LOW
+    note: "Deployed for 'future queue/agent workloads'. No consumer found -> possibly ORPHANED."
+
+  - id: neo-traffic
+    stack: platform
+    status: ACTIVE
+    criticality: LOW
+    network: { bind: host, port: 8685 }
+    note: "vnstat bandwidth JSON. Installs packages at every container start (no image build)."
+
+phantom_services:
+  note: "Advertised in homepage/services.yaml but ABSENT from all compose files. CONFIGURATION_DRIFT."
+  entries:
+    - { name: Proxmox,           href: https://lab.jmar.do,        status: UNKNOWN }
+    - { name: Portainer,         href: https://portainer.jmar.do,  status: NOT_IN_IAC }
+    - { name: Uptime Kuma,       href: https://uptime.jmar.do,     status: NOT_IN_IAC }
+    - { name: Dozzle,            href: https://logs.jmar.do,       status: NOT_IN_IAC }
+    - { name: Speedtest Tracker, href: https://speedtest.jmar.do,  status: NOT_IN_IAC }
+
+not_found:
+  - { id: hermes, verdict: DOES_NOT_EXIST, confidence: HIGH,
+      evidence: "only npm packages hermes-parser/hermes-estree in package-lock.json" }
