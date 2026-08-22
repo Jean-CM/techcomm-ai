@@ -1,0 +1,34 @@
+# JMAR / NEO — DOMAIN & DNS INVENTORY
+meta:
+  last_audited: "2026-08-22"
+  registrar_dns: cloudflare
+  caveat: "HTTPS liveness could NOT be tested - egress proxy returned 403 to CONNECT. Resolution only."
+
+zone: jmar.do
+
+records:
+  - { name: jmar.do,             resolves: true,  provider: cloudflare, ips: [104.21.47.11, 172.67.169.175], origin: UNKNOWN, live: UNVERIFIED }
+  - { name: neo.jmar.do,         resolves: true,  provider: cloudflare, maps_to: "homepage :3005 on dockerhost (per compose ALLOWED_HOSTS)", origin_path: UNRESOLVED, live: UNVERIFIED }
+  - { name: n8n.jmar.do,         resolves: true,  provider: cloudflare, maps_to: "n8n :5678 on dockerhost", origin_path: UNRESOLVED, live: UNVERIFIED }
+  - { name: viral.jmar.do,       resolves: true,  provider: cloudflare, maps_to: "neo-viral :8790 on dockerhost", origin_path: UNRESOLVED, live: UNVERIFIED }
+  - { name: lab.jmar.do,         resolves: true,  provider: cloudflare, maps_to: "Proxmox (per homepage dashboard)", status: SUSPECT, note: "Proxmox itself unconfirmed" }
+  - { name: techcomm-ai.jmar.do, resolves: true,  provider: vercel,     maps_to: "Vercel project techcomm-ai", live: READY, scope: OUT_OF_SCOPE }
+  - { name: casago.jmar.do,      resolves: true,  provider: vercel,     ips: [216.150.1.129, 216.150.16.129], scope: OUT_OF_SCOPE }
+  - { name: studio.jmar.do,      resolves: false, status: NXDOMAIN, referenced_by: "NEO_STUDIO_CORS_ORIGINS" }
+  - { name: media.jmar.do,       resolves: false, status: NXDOMAIN, referenced_by: "MINIO_BROWSER_REDIRECT_URL" }
+  - { name: studio-api.jmar.do,  resolves: UNTESTED, referenced_by: "apps/web/.env.example NEO_STUDIO_API_URL" }
+  - { name: portainer.jmar.do,   resolves: UNTESTED, referenced_by: "homepage dashboard", status: PHANTOM }
+  - { name: uptime.jmar.do,      resolves: UNTESTED, referenced_by: "homepage dashboard", status: PHANTOM }
+  - { name: logs.jmar.do,        resolves: UNTESTED, referenced_by: "homepage dashboard", status: PHANTOM }
+  - { name: speedtest.jmar.do,   resolves: UNTESTED, referenced_by: "homepage dashboard", status: PHANTOM }
+  - { name: grafana.jmar.do,     resolves: UNTESTED, referenced_by: "homepage dashboard" }
+  - { name: home.jmar.do,        resolves: UNTESTED, referenced_by: "homepage dashboard" }
+
+critical_gap:
+  issue: "DOMAIN -> ORIGIN path is UNRESOLVED for every jmar.do service subdomain."
+  detail: >
+    Cloudflare proxies the DNS, but no cloudflared tunnel, no Cloudflare Tunnel config, and no
+    credential exists in either repository. Tailscale Funnel - the other plausible ingress - is
+    explicitly DISABLED on the tailnet. How external traffic reaches 10.0.0.59 is unexplained.
+  hypotheses: [cloudflare-tunnel-configured-outside-git, port-forward-on-ISP-router, records-are-stale-and-services-are-LAN-only]
+  resolution_requires: "Cloudflare API read access (ACCESS_BLOCKED this session)"

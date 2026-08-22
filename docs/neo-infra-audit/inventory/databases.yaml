@@ -1,0 +1,82 @@
+# JMAR / NEO — DATABASE INVENTORY
+meta:
+  last_audited: "2026-08-22"
+  global_finding: "ZERO backup automation exists for ANY database in this ecosystem."
+
+cloud:
+  supabase:
+    organization: { name: "JMAR NEO", id: kehihnukljngbivvlpos }
+    organizations_not_found: ["JMAR NEO RECOVERY"]
+    projects:
+      - id: rlacvlnelzaiahzenbhn
+        name: "Techcomm Assistant"
+        status: ACTIVE_HEALTHY
+        region: us-east-1
+        postgres: 17.6.1.155
+        created: "2026-07-18"
+        tables: 55
+        rls_enabled_on_all_tables: true
+        scope: OUT_OF_SCOPE   # audit-only per operator rule 41
+        largest_tables: { products: 6051, messages: 388, crm_audit_log: 177, call_events: 57, conversations: 41 }
+        security_advisories:
+          - { level: INFO, count: 13, issue: "RLS enabled but no policies (fails CLOSED - not a leak)",
+              tables: [approval_decisions, approval_followups, cc_appointments, cc_customers, cc_distributors, cc_events, cc_installation_requests, cc_integration_refs, cc_interactions, cc_purchases, cc_stores, cc_technicians, cc_tool_audit] }
+          - { level: WARN, issue: "SECURITY DEFINER functions executable by authenticated role",
+              functions: [get_quote_summary, is_biz_org_member, is_biz_org_writer] }
+          - { level: WARN, issue: "mutable search_path", function: next_quote_number }
+          - { level: WARN, issue: "extension 'vector' installed in public schema" }
+          - { level: WARN, issue: "leaked password protection DISABLED in Auth" }
+        backup: "Supabase managed (plan-dependent) - NOT VERIFIED"
+
+      - id: bftuqpqisitwwwxhnjuv
+        name: CasaGO
+        status: INACTIVE          # paused
+        region: us-west-2
+        scope: OUT_OF_SCOPE
+
+    projects_expected_but_absent:
+      - { name: neo-core-ai,   verdict: NOT_FOUND }
+      - { name: neo-core-prod, verdict: NOT_FOUND }
+
+homelab:
+  - id: neo-postgres
+    engine: postgres:16-alpine
+    role: n8n backing store
+    host: dockerhost
+    network_exposure: internal-only   # GOOD
+    criticality: CRITICAL
+    backup: NONE
+    restore_tested: NEVER
+
+  - id: neo-studio-db
+    engine: postgres:16-alpine
+    role: NEO Studio (viral + analyst)
+    host: dockerhost
+    network_exposure: internal-only   # GOOD
+    criticality: CRITICAL
+    migrations_applied_by: neo-studio-migrate (idempotent psql ON_ERROR_STOP)
+    backup: NONE
+    restore_tested: NEVER
+
+  - id: neo-redis
+    engine: redis:7-alpine
+    persistence: appendonly
+    consumer: NONE_FOUND
+    status: POSSIBLY_ORPHANED
+    backup: NONE
+
+  - id: neo-minio
+    engine: minio object storage
+    bucket: neo-studio
+    anonymous_access: none   # GOOD - explicitly set
+    backup: NONE
+
+orphaned_schema:
+  file: neo-core-ai/database/supabase/schema.sql
+  tables: [projects, conversations, messages, agents, ai_requests, ai_responses, memory_items, design_variants, agent_runs, agent_run_results]
+  deployed_to: NOWHERE_FOUND
+  severity: HIGH
+  detail: >
+    This schema is not present in Techcomm Assistant (which lacks projects, agents, ai_requests,
+    memory_items, design_variants, agent_run_results) and no other Supabase project exists in the org.
+    The NEO-Core web application has no verified database backend.

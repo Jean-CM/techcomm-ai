@@ -1,0 +1,53 @@
+# JMAR / NEO — REPOSITORY INVENTORY
+meta:
+  last_audited: "2026-08-22"
+  github_account: Jean-CM
+  total_repos: 16
+
+core:
+  - name: Jean-CM/neo-core-ai
+    visibility: private
+    language: Python
+    default_branch: main
+    last_push: "2026-08-19T18:47:16Z"
+    role: "NEO monorepo + HomeLab IaC control plane"
+    criticality: CRITICAL
+    status: ACTIVE
+    contains: [apps/web, apps/neo-executor, apps/neo-viral, apps/neo-studio-api, apps/neo-studio-gateway, apps/neo-studio-analyst, infra/compose, database/, ops/, .github/workflows]
+    deploys_to: "dockerhost via self-hosted GitHub Actions runner (label jmar-docker)"
+    workflows: 9
+    secret_scan: "clean (working tree). NOTE: shallow clone - full history NOT scanned."
+    session_access: read-only
+
+  - name: Jean-CM/techcomm-ai
+    visibility: public
+    language: TypeScript
+    default_branch: main
+    last_push: "2026-08-17T19:58:22Z"
+    role: "Techcomm Operations platform (Next.js)"
+    criticality: HIGH
+    status: ACTIVE
+    scope: OUT_OF_SCOPE   # audit-only per operator rule 41
+    deploys_to: "Vercel prj_1mO8ErsoT6yMlXhbbuUVNzBFMTyV -> techcomm-ai.jmar.do"
+    database: "Supabase Techcomm Assistant (rlacvlnelzaiahzenbhn)"
+    secret_scan: "clean across all 57 commits of history"
+
+adjacent:
+  - { name: Jean-CM/watcheagle-Web,        last_push: "2026-05-15", status: LEGACY, note: "Referenced in ecosystem context; absent from NEO IaC" }
+  - { name: Jean-CM/watcheagle-waha,       last_push: "2026-04-28", status: LEGACY }
+  - { name: Jean-CM/techcomm-ai-insights,  last_push: "2026-07-22", status: UNKNOWN, note: "Possible duplicate/companion of techcomm-ai - verify ownership" }
+  - { name: Jean-CM/payflow-control,       last_push: "2026-07-25", status: OUT_OF_SCOPE }
+  - { name: Jean-CM/renta-mapa-rd,         last_push: "2026-08-06", status: OUT_OF_SCOPE }
+  - { name: Jean-CM/web-agent,             last_push: "2026-06-05", status: UNKNOWN }
+  - { name: Jean-CM/beatbrain-analytics,   last_push: "2026-05-12", status: OUT_OF_SCOPE }
+  - { name: Jean-CM/Tamo-harto-EDES-bot,   last_push: "2026-06-02", status: OUT_OF_SCOPE }
+  - { name: Jean-CM/video-factory,         last_push: "2026-04-10", status: LEGACY }
+  - { name: Jean-CM/jatune-studio-frontend,last_push: "2026-05-25", status: LEGACY }
+  - { name: Jean-CM/Gestor_cuentas_SP,     last_push: "2026-04-02", status: LEGACY }
+  - { name: Jean-CM/mi-gestor-cuentas,     last_push: "2026-03-30", status: LEGACY, note: "Probable duplicate of Gestor_cuentas_SP" }
+  - { name: Jean-CM/music-stats-app,       last_push: "2026-03-23", status: LEGACY }
+
+missing:
+  - name: jmar-infrastructure
+    verdict: DOES_NOT_EXIST
+    note: "Proposed GitOps repo from target architecture. IaC currently lives in neo-core-ai/infra/."
